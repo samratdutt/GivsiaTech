@@ -1,0 +1,92 @@
+name: Deploy to Hostinger VPS
+
+# Manual trigger always available; automatic on every push to main once
+# you're ready to let merges go straight to production. Until then, use
+# "Run workflow" in the Actions tab so nothing ships without you clicking it.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Built here (not on the VPS) so the small VPS never has to run a
+      # memory-hungry Vite build — this job's output is just static files.
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload frontend build to VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "frontend/dist/*"
+          target: "/var/www/givsiatech/frontend_new"
+          strip_components: 2
+
+      # Regenerates backend/.env from GitHub Secrets on every deploy, pulls
+      # the latest backend code, swaps the frontend build in atomically, and
+      # restarts only the backend container. This is the actual answer to
+      # "how do I change Razorpay keys / the API URL through GitHub": update
+      # the secret in the repo's Settings -> Secrets, then re-run this
+      # workflow (or push to main) — nothing is ever hand-edited on the VPS.
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/givsiatech
+            git pull origin main
+
+            cat > backend/.env << 'ENVEOF'
+            PORT=5000
+            TRUST_PROXY=1
+            CLIENT_URL=https://givsiatech.com
+            MONGO_URI=${{ secrets.MONGO_URI }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRES_IN=7d
+            ADMIN_INVITE_CODE=${{ secrets.ADMIN_INVITE_CODE }}
+            SERVICE_INVITE_CODE=${{ secrets.SERVICE_INVITE_CODE }}
+            RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }}
+            RAZORPAY_KEY_SECRET=${{ secrets.RAZORPAY_KEY_SECRET }}
+            RAZORPAY_WEBHOOK_SECRET=${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+            TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
+            TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
+            TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            GOOGLE_PLACES_API_KEY=${{ secrets.GOOGLE_PLACES_API_KEY }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            GEMINI_MODEL=gemini-flash-lite-latest
+            SMTP_HOST=${{ secrets.SMTP_HOST }}
+            SMTP_PORT=${{ secrets.SMTP_PORT }}
+            SMTP_USER=${{ secrets.SMTP_USER }}
+            SMTP_PASS=${{ secrets.SMTP_PASS }}
+            EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+            ADMIN_NOTIFY_EMAIL=${{ secrets.ADMIN_NOTIFY_EMAIL }}
+            ENVEOF
+
+            docker compose up -d --build backend
+
+            rm -rf /var/www/givsiatech/frontend_old
+            mv /var/www/givsiatech/frontend /var/www/givsiatech/frontend_old 2>/dev/null || true
+            mv /var/www/givsiatech/frontend_new /var/www/givsiatech/frontend

@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GivsiaTech — Business Logic &amp; Pitch Reference</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0a12;
+    --surface: #16131f;
+    --border: #2c2538;
+    --text: #f1eefc;
+    --text-dim: #a89fc7;
+    --accent: #c3aeff;
+    --accent2: #ffd94d;
+    --green: #7ee787;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Roboto, -apple-system, sans-serif;
+    line-height: 1.65;
+  }
+  header { padding: 40px 24px 20px; max-width: 980px; margin: 0 auto; }
+  h1 {
+    font-size: 1.9rem;
+    margin: 0 0 8px;
+    background: linear-gradient(100deg, var(--accent2), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .note {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    max-width: 680px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 14px;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 0 24px 60px; }
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+    font-size: 0.88rem;
+  }
+  nav.toc h2 { margin: 0 0 10px; font-size: 1rem; color: var(--accent2); }
+  nav.toc ol { margin: 0; padding-left: 20px; columns: 2; color: var(--text-dim); }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 26px 28px;
+    margin-bottom: 28px;
+    scroll-margin-top: 20px;
+  }
+  h2 { font-size: 1.3rem; margin: 0 0 6px; color: var(--accent2); display: flex; align-items: baseline; gap: 10px; }
+  h2 .num { color: var(--text-dim); font-size: 1rem; }
+  h3 { font-size: 1.02rem; margin: 22px 0 8px; color: var(--accent); }
+  p { color: var(--text-dim); font-size: 0.92rem; }
+  p.lead { color: var(--text); font-size: 1.02rem; margin-top: 4px; }
+  .pitch {
+    border-left: 3px solid var(--accent2);
+    background: rgba(255, 217, 77, 0.07);
+    padding: 14px 18px;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.95rem;
+    color: var(--text);
+    margin: 14px 0;
+  }
+  .pitch b { color: var(--accent2); }
+  code {
+    background: rgba(255,255,255,0.07);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #ffe08a;
+  }
+  ul, ol.plain { color: var(--text-dim); font-size: 0.9rem; padding-left: 22px; }
+  ul li, ol.plain li { margin-bottom: 7px; }
+  ul li strong, ol.plain li strong { color: var(--text); }
+  .mermaid { display: flex; justify-content: center; margin: 10px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 12px 0; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text-dim); }
+  th { color: var(--text); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  td strong { color: var(--text); }
+  .qa {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+  }
+  .qa .q { color: var(--accent2); font-weight: 600; font-size: 0.92rem; margin-bottom: 6px; }
+  .qa .a { color: var(--text-dim); font-size: 0.9rem; }
+  .tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    margin-right: 6px;
+    margin-bottom: 10px;
+  }
+  footer { max-width: 980px; margin: 0 auto; padding: 0 24px 60px; color: var(--text-dim); font-size: 0.82rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>GivsiaTech — Business Logic &amp; Pitch Reference</h1>
+  <p class="note">
+    Internal reference only, for interview prep and pitch practice — not published or linked anywhere on the live
+    site. Lives in <code>docs/</code>, outside <code>frontend/src</code>/<code>public</code>, so it's never bundled
+    or served. Every mechanic described below is read directly from the actual data models and route logic in this
+    codebase, not invented — so it should hold up if someone asks a follow-up question.
+  </p>
+</header>
+
+<main>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#pitch">The one-line pitch</a></li>
+    <li><a href="#model">Business model — how it makes money</a></li>
+    <li><a href="#roles">The three-sided platform</a></li>
+    <li><a href="#journey">Customer journey, end to end</a></li>
+    <li><a href="#flywheel">The portfolio flywheel</a></li>
+    <li><a href="#ai">AI as a business lever, not a gimmick</a></li>
+    <li><a href="#trust">Trust, governance &amp; risk controls</a></li>
+    <li><a href="#stack">Why this stack — the technical-choice-to-business-reason map</a></li>
+    <li><a href="#qa">Interview Q&amp;A cheat sheet</a></li>
+    <li><a href="#outbound">Outbound growth engine — AI Business Lead Finder</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<section id="pitch">
+  <h2><span class="num">01</span> The one-line pitch</h2>
+  <div class="pitch">
+    <b>GivsiaTech</b> (by Givsia Private Limited) is a software studio that sells four things — <b>websites, AI
+    automation, SaaS builds, and mobile app development</b> — through a single platform that runs the entire client relationship end to end:
+    request → pay → track → review → and, once delivered, the finished project becomes public portfolio proof that
+    sells the next client.
+  </div>
+  <p>
+    The interesting part for an interview isn't "it's a website with a dashboard" — it's that the same platform
+    plays three different roles depending on who's logged in: a <strong>storefront</strong> for visitors, an
+    <strong>operations system</strong> for the company (orders, invoicing, renewals, moderation), and a
+    <strong>growth engine</strong> for outbound sales (AI-assisted cold outreach, grounded in the company's real,
+    current data so it never overpromises).
+  </p>
+</section>
+
+<!-- 2 -->
+<section id="model">
+  <h2><span class="num">02</span> Business model — how it makes money</h2>
+  <p class="lead">Two revenue shapes, both modeled directly in the <code>Order</code> schema:</p>
+  <table>
+    <tr><th>Revenue type</th><th>How it's captured</th><th>Why it matters</th></tr>
+    <tr>
+      <td><strong>Project-based (primary)</strong></td>
+      <td>Client pays via Razorpay checkout for a fixed-scope build (<code>service</code>: website / AI
+      automation / SaaS / app development / other). Payment is verified server-side by re-computing the Razorpay HMAC signature
+      before an order is ever marked paid — never trusts the frontend's word for it.</td>
+      <td>This is the core, one-time services revenue — the studio's bread and butter.</td>
+    </tr>
+    <tr>
+      <td><strong>Recurring / renewal (secondary)</strong></td>
+      <td>Every delivered project can carry <code>domain</code>, <code>hostingProvider</code>,
+      <code>domainExpiryDate</code>, <code>hostingExpiryDate</code>. These surface in a dedicated admin
+      <strong>Renewals</strong> tab so the team can proactively reach out before a client's domain/hosting lapses.</td>
+      <td>Turns a one-time build into an ongoing relationship — maintenance/hosting renewal revenue instead of a
+      single transaction.</td>
+    </tr>
+  </table>
+  <p>
+    <em>Accuracy note for interviews:</em> renewal tracking today is a data field surfaced to the admin for manual
+    follow-up — there's no automated reminder email/cron job yet. That's a natural "here's what I'd build next"
+    answer if asked about roadmap.
+  </p>
+  <h3>Pricing is content, not code</h3>
+  <p>
+    Pricing tiers (<code>Pricing</code> model: name, price, description, feature list, "featured" flag, display
+    order) are admin-editable data, not hardcoded numbers in the frontend. That means the business can change
+    pricing, run promotions, or add a tier without a deploy — a real "run the business without an engineer"
+    capability worth mentioning.
+  </p>
+  <h3>Two sales channels feed the same pipe</h3>
+  <ul>
+    <li><strong>Inbound / online:</strong> a visitor registers, requests a project, and pays through the site
+      themselves (<code>source: "online"</code>).</li>
+    <li><strong>Outbound / offline:</strong> a deal closed by phone, in person, or via cold outreach is logged
+      manually by an admin (<code>source: "offline"</code>, with an optional <code>manualClient</code> — name,
+      phone, email — for a walk-in customer who has no account at all).</li>
+  </ul>
+  <p>
+    Both paths land in the exact same <code>Order</code> collection and the exact same admin Orders tab — the
+    business doesn't run two separate systems for "deals we closed ourselves" vs. "deals that came through the
+    website."
+  </p>
+</section>
+
+<!-- 3 -->
+<section id="roles">
+  <h2><span class="num">03</span> The three-sided platform</h2>
+  <p>One codebase, one login system, three completely different experiences depending on <code>role</code>:</p>
+  <pre class="mermaid">
+graph LR
+    V["Visitor<br/>(anonymous)"] -->|registers| C["client<br/>self-serve customer"]
+    V -->|invite code| A["admin<br/>runs the business"]
+    V -->|invite code| S["service<br/>growth / outbound sales"]
+
+    C -->|"request + pay for a project"| Ops["Company operations"]
+    A -->|"manage orders, pricing, content,<br/>users, renewals, moderation"| Ops
+    S -->|"AI-drafted cold outreach,<br/>email-only, logged + auditable"| Growth["New leads"]
+    Growth -.->|becomes| C
+  </pre>
+  <table>
+    <tr><th>Role</th><th>Who</th><th>What they can do</th></tr>
+    <tr>
+      <td><strong>client</strong></td>
+      <td>A paying customer</td>
+      <td>Request a project, pay, watch a live progress bar + timeline of admin-posted updates, self-cancel within
+      a 2-day window, leave exactly one review after delivery.</td>
+    </tr>
+    <tr>
+      <td><strong>admin</strong></td>
+      <td>Company staff running the business</td>
+      <td>11 dashboard tabs: overview, orders, renewals, users, messages (leads), pricing, portfolio, about,
+      transactions, reviews, activity. Full control over content, pricing, moderation, and every order's lifecycle.</td>
+    </tr>
+    <tr>
+      <td><strong>service</strong></td>
+      <td>Outbound / growth-ops staff</td>
+      <td>A narrow, purpose-built dashboard: draft and send AI-assisted cold outreach emails to prospects, nothing
+      else — can't see client accounts, orders, or payment data. Explicitly can't request a project themselves
+      (the UI tells them so if they try).</td>
+    </tr>
+  </table>
+  <p>
+    Both <code>admin</code> and <code>service</code> accounts are created only via a secret invite code checked at
+    registration — there's no public "become an admin" signup path. Registration is otherwise identical (name,
+    email, OTP-verified phone, password) across all three roles; only the invite code changes which role gets
+    assigned.
+  </p>
+</section>
+
+<!-- 4 -->
+<section id="journey">
+  <h2><span class="num">04</span> Customer journey, end to end</h2>
+  <pre class="mermaid">
+sequenceDiagram
+    actor Client
+    participant Site as GivsiaTech
+    participant Pay as Razorpay
+    participant Admin
+
+    Client->>Site: Registers (OTP-verified phone)
+    Client->>Site: Requests a project (service type + description)
+    Site->>Pay: Creates a payment order
+    Client->>Pay: Pays
+    Pay-->>Site: Signature-verified payment confirmation
+    Site->>Client: Order status flips to "in-progress"
+    loop as work happens
+        Admin->>Site: Posts a progress update (note + % + status)
+        Site->>Client: Emails the client, updates their live progress bar
+    end
+    Admin->>Site: Marks the order "completed"
+    Client->>Site: Leaves a 1-5 star review (one per client)
+    Admin->>Site: Adds project image + live domain + hosting info
+    Admin->>Site: Publishes the order to the public Work section
+  </pre>
+  <p>
+    Notice the two built-in trust mechanics here: a client can cancel <em>themselves</em> within 2 days of
+    requesting (no admin needed, but the deadline is enforced server-side, not just hidden in the UI after 2 days),
+    and every payment is independently re-verified against Razorpay's cryptographic signature rather than trusting
+    whatever the browser reports back — so a tampered frontend response can't mark an unpaid order as paid.
+  </p>
+</section>
+
+<!-- 5 -->
+<section id="flywheel">
+  <h2><span class="num">05</span> The portfolio flywheel</h2>
+  <p class="lead">
+    This is the single most "product-thinking" piece of business logic in the app, and a strong interview talking
+    point: <strong>finished client work automatically becomes the marketing material that sells the next client</strong> —
+    but the system deliberately won't let that happen until the project is actually presentable.
+  </p>
+  <pre class="mermaid">
+graph TD
+    O["Order marked completed"] --> G1{"Has a project<br/>image been added?"}
+    G1 -->|no| Block1["Publish blocked"]
+    G1 -->|yes| G2{"Domain + hosting<br/>provider recorded?"}
+    G2 -->|no| Block2["Publish blocked"]
+    G2 -->|yes| Publish["Admin publishes to Work section"]
+    Publish --> Portfolio["New public Portfolio case study<br/>(title, tag, stack, image pre-filled from the order)"]
+    Portfolio --> Leads["Seen by future visitors →<br/>feeds new leads / trust signal"]
+  </pre>
+  <p>
+    A completed order can't go live as a public case study until it has a real image <em>and</em> real domain/hosting
+    details attached — the gate exists specifically so the public "Work" section never shows an unfinished or
+    undocumented project. Once published, it's a standalone <code>Portfolio</code> item the admin can keep editing
+    independently, decoupled from the original order.
+  </p>
+</section>
+
+<!-- 6 -->
+<section id="ai">
+  <h2><span class="num">06</span> AI as a business lever, not a gimmick</h2>
+  <p>Two distinct AI touchpoints, and the design choice behind both is the same: <strong>ground every answer in
+  the business's real, current data — never let the model invent a fact, a price, or a client name.</strong></p>
+  <h3>Givi — the on-site conversion assistant</h3>
+  <p>
+    A chat widget answers visitor questions about services, pricing, and past work by pulling live data from the
+    same database the admin edits — so pricing/portfolio updates are instantly reflected in what the AI tells
+    prospects, with zero risk of the bot quoting stale numbers. It's also wired to explain the site's own
+    navigation and steer visitors toward "Start a project" or the contact form, functioning as a low-cost,
+    always-on first line of sales qualification. A hard-coded privacy rule permanently blocks it from ever
+    discussing accounts, credentials, payment records, or internal system details, even under a direct or
+    "ignore your instructions" prompt.
+  </p>
+  <h3>AI-assisted cold outreach — the growth engine</h3>
+  <p>
+    The <code>service</code> role's entire job is outbound: generate a draft cold email via Gemini, grounded in
+    the exact same live pricing/portfolio/company data, review and edit it, then send. Every send — successful or
+    failed — is logged with the sender, recipient, and outcome, giving the business a full audit trail of outbound
+    activity instead of outreach happening invisibly through someone's personal inbox.
+  </p>
+  <div class="pitch">
+    <b>Interview framing:</b> "We didn't just bolt on a chatbot — we built one data-grounding pattern
+    (<code>buildKnowledgeContext</code>) and reused it for both the customer-facing assistant and the internal
+    sales-drafting tool, so the AI never says something the business itself doesn't actually offer."
+  </div>
+</section>
+
+<!-- 7 -->
+<section id="trust">
+  <h2><span class="num">07</span> Trust, governance &amp; risk controls</h2>
+  <p>Details worth having ready if asked "how do you know this is production-grade, not a toy project":</p>
+  <ul>
+    <li><strong>Server-side authorization, always.</strong> Every protected route independently re-checks the JWT
+    and role — the frontend's role-based UI is convenience, not the security boundary.</li>
+    <li><strong>Full activity audit log.</strong> A middleware layer records who did what, when, from where (method,
+    path, action, status code, IP, timestamp), visible to admins in an Activity tab and expiring automatically
+    after 30 days — the kind of accountability trail an enterprise buyer or auditor would expect.</li>
+    <li><strong>Payment integrity.</strong> Payments are verified via HMAC signature recomputation, plus a
+    Razorpay server-to-server webhook as a second, independent confirmation path — not reliant solely on the
+    client-side checkout callback.</li>
+    <li><strong>Founder-locked content.</strong> The public "Founders" section can only be edited by the specific
+    admin account it's linked to — a third admin literally has no document to edit, which is what actually
+    enforces "only the real founders can change their own bios," not just a UI convention.</li>
+    <li><strong>Bounded self-service.</strong> Clients can cancel their own project, but only within a 2-day
+    window enforced at the API level (not just hidden in the UI afterward) — balances customer flexibility against
+    the business's need to not eat a cancellation on work already underway.</li>
+    <li><strong>Review integrity.</strong> One review per client, enforced at the schema level (a unique index on
+    the client field) — resubmitting edits your existing review rather than stacking up duplicates that could
+    skew the average rating.</li>
+    <li><strong>Automated threat response, not just logging.</strong> Failed logins, rate-limit trips, flagged
+    spam/prompt-injection attempts, and rejected uploads all feed one detection log; an IP that trips 3 of them
+    within an hour is auto-blocked for 24 hours, and a repeat offender after that is blocked permanently — with a
+    live admin Security tab and email alerts on anything critical. Verified working end to end during development,
+    including a real self-inflicted block during testing (see the Security Hardening entry in the Development Log).</li>
+    <li><strong>AI-assisted content screening, honestly scoped.</strong> Contact-form and chatbot messages are
+    screened by a fast heuristic layer plus, for ambiguous cases, the same Gemini model already used elsewhere in
+    the app — deliberately described as zero-shot classification, not a trained fraud-detection model, anywhere
+    it's discussed. A "suspicious" verdict is flagged for human review rather than auto-rejected, so a heuristic
+    false positive can't silently turn away a real lead.</li>
+    <li><strong>Money moves fail-safe, never fail-silent.</strong> A refund is only ever recorded once Razorpay's
+    refund API call actually succeeds — a failed call leaves the order's state completely untouched and surfaces
+    a clear error, instead of quietly promising a refund that didn't happen.</li>
+    <li><strong>Discount limits enforced at the boundary, not the form.</strong> A client can undercut a service's
+    listed price by at most ₹5,000 when requesting a project — re-derived and enforced in the payment-creation
+    endpoint itself, not just disabled in the UI, so the real floor can't be bypassed by editing a request.</li>
+    <li><strong>New data-sourcing features are scoped to what's actually lawful to automate.</strong> The AI
+    Business Lead Finder discovers prospects via Google's official, paid Places API rather than scraping Google
+    Maps or listing sites (both explicitly prohibit that in their terms); the New Business Monitor (newly
+    registered companies) is import-only, since the relevant government registry has no free bulk API. Both
+    limits are stated directly in the admin tool's own copy, not glossed over.</li>
+  </ul>
+</section>
+
+<!-- 8 -->
+<section id="stack">
+  <h2><span class="num">08</span> Why this stack — technical choice → business reason</h2>
+  <table>
+    <tr><th>Technical choice</th><th>Business reason</th></tr>
+    <tr><td>Role-based JWT auth (admin/client/service), invite-code-gated for admin/service</td>
+        <td>One login system serves three completely different audiences without three separate apps to maintain.</td></tr>
+    <tr><td>Content (pricing, portfolio, about, founders) stored as editable data, not hardcoded</td>
+        <td>Non-engineers on the team can update prices, add case studies, or change company copy without a
+        developer or a deploy.</td></tr>
+    <tr><td>AI responses grounded in live DB data instead of a static prompt</td>
+        <td>Removes the single biggest AI-adoption risk for a services business — the bot quoting a stale price or
+        a client name it shouldn't know.</td></tr>
+    <tr><td>Dual logging (raw HTTP + semantic activity log)</td>
+        <td>Operational debugging and business accountability are two different needs — the raw log helps engineers,
+        the activity log helps the business answer "who changed this and when."</td></tr>
+    <tr><td>Manual/offline order entry alongside online checkout</td>
+        <td>The platform doesn't force every sale through a self-serve checkout — it also captures deals closed the
+        old-fashioned way, so the business has one single source of truth for all revenue, not two.</td></tr>
+    <tr><td>Invoice PDFs generated server-side (PDFKit), not a browser print dialog</td>
+        <td>A client gets a real, consistent, downloadable document for their records — not a screenshot-quality
+        browser print-out that looks different on every device.</td></tr>
+    <tr><td>Business lead discovery via Google's official Places API, not scraping</td>
+        <td>Keeps an outbound growth feature on the right side of Google's terms of service from day one, instead
+        of building on a data source that could be cut off or create legal exposure later.</td></tr>
+  </table>
+</section>
+
+<!-- 9 -->
+<section id="qa">
+  <h2><span class="num">09</span> Interview Q&amp;A cheat sheet</h2>
+
+  <div class="qa">
+    <div class="q">"Walk me through what this project actually does."</div>
+    <div class="a">It's a full-stack platform for a software services company: a public marketing site that
+    converts visitors into paying clients, a client dashboard that runs the entire project lifecycle (request, pay,
+    track, review), an admin backend that runs the business (orders, pricing, content, users, renewals), and a
+    dedicated growth-ops role for AI-assisted outbound sales — all sharing one auth system and one database.</div>
+  </div>
+
+  <div class="qa">
+    <div class="q">"What was the hardest business-logic decision, not just technical decision?"</div>
+    <div class="a">Deciding what should gate a project going live in the public portfolio. Landing on "must be
+    completed, must have an image, must have domain + hosting recorded" — encoded as actual validation in the
+    publish endpoint, not just a checklist someone has to remember — means the public case-study section can never
+    accidentally show unfinished or undocumented work.</div>
+  </div>
+
+  <div class="qa">
+    <div class="q">"How does the AI actually make money for the business, concretely?"</div>
+    <div class="a">Two ways: it lowers the cost of qualifying inbound visitors (Givi answers pricing/services
+    questions instantly, 24/7, instead of a human doing first-touch triage), and it speeds up outbound prospecting
+    (the service role drafts a grounded, on-brand cold email in seconds instead of a person writing one from
+    scratch) — while every send is logged, so it's measurable, not a black box.</div>
+  </div>
+
+  <div class="qa">
+    <div class="q">"What would you build next if you kept going?"</div>
+    <div class="a">Automated renewal reminders — the data (domain/hosting expiry dates) is already tracked and
+    surfaced to admins, but there's no scheduled job yet that emails a client proactively before their domain
+    lapses. That's the clearest gap between "data we capture" and "revenue we actually convert on."</div>
+  </div>
+
+  <div class="qa">
+    <div class="q">"How do you prevent the AI from misrepresenting the company?"</div>
+    <div class="a">Every AI-facing feature shares one pattern: build the prompt context by querying the live
+    Pricing/Portfolio/CompanyInfo collections at request time, and explicitly instruct the model never to invent
+    numbers, names, or guarantees beyond what's given. It's the same function reused for both the customer chatbot
+    and the internal outreach drafting tool, so there's one place that guarantee lives, not two.</div>
+  </div>
+
+  <div class="qa">
+    <div class="q">"Why three roles instead of just admin and client?"</div>
+    <div class="a">Because outbound sales/growth work is operationally different from running the business — a
+    growth-ops person needs to send outreach emails but has no business reason to see client accounts, orders, or
+    payment data. Splitting it into its own <code>service</code> role means the principle of least privilege is
+    enforced by the role system itself, not by trusting someone not to click around.</div>
+  </div>
+
+  <div class="qa">
+    <div class="q">"How do you find new customers, versus just waiting for them to find you?"</div>
+    <div class="a">The AI Business Lead Finder — an admin-only tool that discovers real local businesses with no
+    website via Google's official Places API, drops them into a full lead-management CRM (status pipeline, notes,
+    activity timeline, follow-up scheduling), and drafts a grounded AI outreach email or proposal for each one.
+    It turns admin from someone who only processes inbound requests into someone who can actively go find work.</div>
+  </div>
+
+  <div class="qa">
+    <div class="q">"Isn't scraping business listings for leads legally risky?"</div>
+    <div class="a">That's exactly why it doesn't scrape. Google Maps and listing sites like Justdial explicitly
+    prohibit automated scraping in their terms regardless of intent, so discovery goes through Google's own paid
+    Places API instead — the same data (name, address, phone, rating, review count, website presence), obtained
+    the way Google actually allows. The same reasoning applies to the newly-registered-companies module: no free
+    bulk API exists for that government registry, so that one is import-only rather than built on a scraper.</div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="outbound">
+  <h2><span class="num">10</span> Outbound growth engine — AI Business Lead Finder</h2>
+  <p>
+    Section 06 covers AI as a conversion/efficiency lever for demand that already exists. This is the newer,
+    complementary half: AI-assisted <em>sourcing</em> of demand that doesn't know GivsiaTech exists yet.
+  </p>
+  <h3>The gap it closes</h3>
+  <p>
+    Every mechanism described elsewhere in this document — Givi, the contact form, the outreach-drafting tool —
+    only activates once someone has already found the site. For a services business selling to small/local
+    businesses (the exact list this tool targets: restaurants, clinics, salons, gyms, real estate agents, and two
+    dozen more categories), a large share of the addressable market never searches for a software studio at all —
+    they simply don't have a website and don't know what having one would change. Someone has to go find them
+    first.
+  </p>
+  <h3>How it's structured as a real sales tool, not a toy</h3>
+  <ul>
+    <li><strong>Discovery, not a list dump.</strong> Businesses are found per category + city/country via Google
+    Places, and anything that already has a real website is filtered out automatically before it ever reaches the
+    pipeline — the tool only surfaces businesses that actually match the pitch.</li>
+    <li><strong>One CRM engine, two modules.</strong> The same lead-status pipeline (New → Contacted → Follow-Up →
+    Meeting → Proposal → Negotiation → Won/Lost/Do-Not-Contact), notes, and activity timeline serve both the
+    website-discovery module and the newly-registered-business module — a sales rep learns one workflow, not two.</li>
+    <li><strong>AI drafts, human sends.</strong> Every generated email or proposal is grounded in the same live
+    pricing/portfolio data used sitewide, shown for review/editing, and never auto-sent — same trust pattern as
+    the existing Service Dashboard outreach tool, just reused rather than reinvented.</li>
+    <li><strong>Measurable, not a black box.</strong> Analytics (total/new-today/contacted/pending/follow-ups-due/
+    won/lost/conversion-rate, leads by category) turn "we're doing outbound now" into a number someone can report
+    on weekly.</li>
+  </ul>
+  <p class="note" style="margin-top:16px;">
+    Scoped deliberately for a first pass: city/country are filters on one table rather than dozens of hardcoded
+    per-city dashboards, and the newly-registered-business module is CSV-import-only pending a licensed registry
+    data provider. Both are described in more implementation detail in <code>DEVELOPMENT_LOG.html</code> §18.
+  </p>
+</section>
+
+</main>
+
+<footer>
+  Every mechanic in this document is read directly from the current codebase (models in <code>backend/models/</code>,
+  route logic in <code>backend/routes/</code>) as of the date this was generated — not aspirational or invented.
+  If the code changes, this document should be regenerated to stay accurate for interview use.
+</footer>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: "dark" });
+</script>
+</body>
+</html>

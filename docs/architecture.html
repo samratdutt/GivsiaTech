@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GivsiaTech — Architecture & Control Flow</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0a12;
+    --surface: #16131f;
+    --border: #2c2538;
+    --text: #f1eefc;
+    --text-dim: #a89fc7;
+    --accent: #c3aeff;
+    --accent2: #ffd94d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Roboto, -apple-system, sans-serif;
+    line-height: 1.6;
+  }
+  header {
+    padding: 40px 24px 20px;
+    max-width: 980px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.8rem;
+    margin: 0 0 8px;
+    background: linear-gradient(100deg, var(--accent2), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .note {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    max-width: 640px;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 0 24px 60px; }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 28px;
+    overflow-x: auto;
+  }
+  h2 {
+    font-size: 1.15rem;
+    margin: 0 0 14px;
+    color: var(--accent2);
+  }
+  p.desc { color: var(--text-dim); font-size: 0.88rem; margin: 12px 0 0; }
+  .mermaid { display: flex; justify-content: center; }
+  code {
+    background: rgba(255,255,255,0.06);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+  ul { color: var(--text-dim); font-size: 0.9rem; }
+  ul li { margin-bottom: 6px; }
+  ul li strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>GivsiaTech — Architecture &amp; Control Flow</h1>
+  <p class="note">
+    Internal reference only — this file is not part of the deployed website (it lives in <code>docs/</code>,
+    outside <code>frontend/src</code> and <code>frontend/public</code>, so Vite never bundles it and nothing here
+    is served publicly). Keep it locally.
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1. System architecture</h2>
+  <pre class="mermaid">
+graph TB
+    subgraph Client["Browser — React 18 + Vite SPA"]
+        direction TB
+        Providers["Global Providers<br/>ThemeContext · AuthContext · ToastContext"]
+        Router["React Router (BrowserRouter)"]
+        Pages["Public Pages<br/>Home · Login · Register · Profile"]
+        Dashboards["Role Dashboards<br/>AdminDashboard · ClientDashboard · ServiceDashboard"]
+        Shared["Shared UI<br/>Navbar · Footer · GiviChat · CookieConsent · LoadingScreen · HeroScene (3D)"]
+        Axios["axios instance<br/>(JWT bearer interceptor)"]
+        Providers --> Router
+        Router --> Pages
+        Router --> Dashboards
+        Pages --> Shared
+        Dashboards --> Shared
+        Pages -.-> Axios
+        Dashboards -.-> Axios
+    end
+
+    subgraph Server["Docker container — Node.js + Express API"]
+        direction TB
+        MW["Middleware chain<br/>morgan → helmet → mongoSanitize → cors → ipBlocklist → express.json → activityLogger"]
+        SecMW["Rate limiters (per-route) · brute-force lockout ·<br/>content screening · upload signature check → SecurityEvent / BlockedIP"]
+        AuthMW["protect (JWT verify) → authorize(role)"]
+        Routes["14 route modules<br/>auth · users · payments · contact · chat · pricing · portfolio<br/>company · reviews · founders · uploads · outreach · activity · security · bizLead"]
+        MW --> SecMW --> AuthMW --> Routes
+    end
+
+    subgraph Data["Data & External Services"]
+        Mongo[("MongoDB Atlas<br/>16 collections")]
+        Gemini["Google Gemini API<br/>Givi chatbot · outreach drafts · AI lead emails/proposals"]
+        Places["Google Places API<br/>AI Business Lead Finder discovery"]
+        Twilio["Twilio SMS<br/>OTP delivery"]
+        Razorpay["Razorpay<br/>payments + refunds"]
+        Gmail["Gmail SMTP (nodemailer)<br/>notifications + outreach"]
+        GoogleOAuth["Google OAuth<br/>Sign in with Google"]
+        PDFKit["PDFKit<br/>invoice generation (in-process)"]
+    end
+
+    Axios ==>|HTTPS + JWT| MW
+    Routes --> Mongo
+    Routes --> Gemini
+    Routes --> Places
+    Routes --> Twilio
+    Routes --> Razorpay
+    Routes --> Gmail
+    Routes --> PDFKit
+    AuthMW -.-> GoogleOAuth
+  </pre>
+</section>
+
+<section>
+  <h2>2. Request / control flow (a typical authenticated call)</h2>
+  <pre class="mermaid">
+sequenceDiagram
+    actor U as User (Browser)
+    participant FE as React App
+    participant AX as axios (adds JWT)
+    participant MW as Express Middleware Chain
+    participant RT as Route Handler
+    participant DB as MongoDB
+
+    U->>FE: Clicks a button (e.g. "Send email")
+    FE->>AX: api.post("/outreach/send", data)
+    AX->>MW: HTTPS request + Authorization: Bearer JWT
+    MW->>MW: morgan logs the raw request line
+    MW->>MW: activityLogger wraps res.json() to capture the outcome later
+    MW->>MW: helmet, mongoSanitize, cors, express.json()
+    MW->>RT: protect() verifies JWT, attaches req.user
+    RT->>RT: authorize("admin","service") checks role
+    RT->>DB: Mongoose query / write
+    DB-->>RT: result
+    RT-->>MW: res.json(...)
+    MW->>MW: "finish" event — activityLogger logs "who did what" to stdout and Mongo
+    MW-->>AX: JSON response
+    AX-->>FE: resolved promise
+    FE->>U: ToastContext shows a success/error toast
+  </pre>
+  <p class="desc">
+    Two logging layers run on every request, independently: <strong>morgan</strong> (raw HTTP line → stdout only)
+    and <strong>activityLogger</strong> (human-readable "who did what" → stdout <em>and</em> the ActivityLog
+    collection, visible in the admin Activity tab). Read-only GETs are skipped.
+  </p>
+</section>
+
+<section>
+  <h2>3. Role-based registration &amp; routing</h2>
+  <pre class="mermaid">
+graph TD
+    Reg["/register — 3 tabs<br/>Sign up · Admin · Service"]
+    Reg -->|default| RC["POST /api/auth/register"]
+    Reg -->|admin invite code| RA["POST /api/auth/register-admin"]
+    Reg -->|service invite code| RS["POST /api/auth/register-service"]
+    RC --> JWT["JWT issued<br/>role embedded, fetched via GET /api/auth/me"]
+    RA --> JWT
+    RS --> JWT
+    JWT --> PR["ProtectedRoute<br/>(client-side UX guard only)"]
+    PR -->|role = admin| AD["/dashboard/admin — 14 tabs<br/>overview · orders · renewals · users · messages · pricing · portfolio<br/>about · transactions · reviews · activity · security<br/>+ AI Lead Finder · New Business Monitor"]
+    PR -->|role = client| CD["/dashboard/client<br/>request project (price-floor enforced) · pay · download invoice · cancel/refund · track · support · review"]
+    PR -->|role = service| SD["/dashboard/service<br/>AI cold-outreach email"]
+    PR -.->|real enforcement happens here| SRV["Backend authorize(role) middleware<br/>on every protected route"]
+  </pre>
+  <p class="desc">
+    The frontend guard only controls what's <em>shown</em>. The real security boundary is server-side — every
+    protected route independently re-checks the JWT and role.
+  </p>
+</section>
+
+<section>
+  <h2>4. Data model relationships</h2>
+  <pre class="mermaid">
+erDiagram
+    USER ||--o{ ORDER : places
+    USER ||--o{ REVIEW : writes
+    USER ||--o{ CONTACTMESSAGE : sends
+    USER ||--o| FOUNDER : "has a profile (2 accounts only)"
+    USER ||--o{ OUTREACH : sends
+    USER ||--o{ ACTIVITYLOG : performs
+    USER ||--o{ SECURITYEVENT : "triggers (best-effort)"
+    USER ||--o{ BIZLEAD : "creates / is assigned"
+    ORDER ||--o| REVIEW : "optionally linked"
+    ORDER ||--o| CONTACTMESSAGE : "optionally linked"
+    BIZLEAD ||--o{ OUTREACH : "communication history (shared log)"
+  </pre>
+  <p class="desc">
+    <code>Pricing</code>, <code>Portfolio</code>, and <code>CompanyInfo</code> are standalone content collections
+    (admin-editable, no user references) — they feed the public site, Givi's chatbot context, <em>and</em> the AI
+    Lead Finder's outreach/proposal generation via one shared <code>buildServiceContext()</code> helper.
+    <code>Otp</code>/<code>PasswordReset</code> are ephemeral (TTL-expired).
+    <code>SecurityEvent</code> (90-day TTL) and <code>BlockedIP</code> are IP-keyed, not user-keyed — the USER
+    link is optional/best-effort. <code>BizLead</code> reuses the existing <code>Outreach</code> collection as
+    its communication history (an optional <code>lead</code> ref was added rather than a second email log).
+  </p>
+</section>
+
+<section>
+  <h2>5. Phone OTP verification + registration flow</h2>
+  <pre class="mermaid">
+sequenceDiagram
+    actor V as Visitor
+    participant FE as Register Page
+    participant API as Backend
+    participant Twilio
+    participant DB as MongoDB (Otp)
+
+    V->>FE: Enters phone number
+    FE->>API: POST /api/auth/send-otp
+    API->>DB: store hashed 6-digit code (5 min TTL)
+    API->>Twilio: send SMS
+    alt Twilio succeeds
+        Twilio-->>V: SMS with code
+    else Twilio fails / not configured
+        API-->>FE: devCode returned directly (dev fallback only)
+    end
+    V->>FE: types code into OtpBoxes (auto-advance + paste support)
+    FE->>API: POST /api/auth/verify-otp
+    API->>DB: compare hash, mark verified (15 min window)
+    API-->>FE: verified: true
+    FE->>FE: animated checkmark reveal ("Verified!")
+    V->>FE: completes name / email / password
+    FE->>API: POST /api/auth/register (or register-admin / register-service)
+    API->>DB: create User, delete the spent Otp
+    API-->>FE: JWT + user
+    FE->>FE: store token, redirect to the role's dashboard
+  </pre>
+  <p class="desc">
+    Every email/phone input site-wide now also gets live client-side format validation — a red warning icon while
+    invalid, a green check once it matches (<code>ValidatedInput.jsx</code> + <code>utils/validators.js</code>,
+    the phone regex mirroring the backend's own <code>normalizePhone</code>). UX feedback only; the backend
+    independently re-validates on every write.
+  </p>
+</section>
+
+<section>
+  <h2>6. Payment → Invoice → Refund flow</h2>
+  <pre class="mermaid">
+sequenceDiagram
+    actor C as Client
+    participant FE as Client Dashboard
+    participant API as paymentRoutes.js
+    participant RZP as Razorpay
+    participant DB as MongoDB (Order)
+    participant Mail as sendEmail
+
+    C->>FE: Requests a project (service + custom amount)
+    FE->>API: POST /payments/create-order
+    API->>API: Enforce price floor — amount >= basePrice - 5000
+    API->>RZP: orders.create()
+    RZP-->>API: razorpay order id
+    API->>DB: Order paymentStatus: "unpaid"
+    C->>RZP: Completes checkout (Razorpay widget)
+    FE->>API: POST /payments/verify (signature)
+    API->>DB: Order paymentStatus: "paid"
+    API-->>Mail: payment confirmation email
+
+    Note over C,DB: Self-cancellation window — 48h from request
+    C->>FE: Cancel project
+    FE->>API: PATCH /payments/orders/:id/cancel
+    alt order is paid
+        API->>RZP: payments.refund(paymentId, amount)
+        alt refund succeeds
+            RZP-->>API: refund id
+            API->>DB: paymentStatus: "refunded", refundId, refundedAt
+            API-->>Mail: refund confirmation email
+        else refund API call fails
+            API-->>FE: 502 — order left COMPLETELY unchanged
+        end
+    else order was never paid
+        API->>DB: status: "cancelled"
+    end
+
+    C->>FE: Download invoice / payment details
+    FE->>API: GET /payments/orders/:id/invoice (blob, JWT header)
+    API->>API: generateInvoicePdf() — PDFKit, streamed directly
+    API-->>FE: application/pdf
+  </pre>
+  <p class="desc">
+    Fail-safe by design: a failed Razorpay refund call never marks the order "cancelled"/"refunded" — it leaves
+    the order's state completely untouched and returns a clear error, rather than silently promising a refund
+    that didn't happen. The invoice includes a refund note when applicable. PDFKit's standard fonts have no ₹
+    glyph, so amounts render as <code>Rs. 25,000</code> — a font limitation, not a bug. The frontend download uses
+    <code>responseType:"blob"</code> + <code>createObjectURL</code> since a plain <code>&lt;a href&gt;</code> can't
+    carry the Authorization header a protected route needs.
+  </p>
+</section>
+
+<section>
+  <h2>Key architectural decisions worth remembering</h2>
+  <ul>
+    <li><strong>Security enforced server-side only.</strong> <code>ProtectedRoute</code> on the frontend is UX
+      convenience; every backend route independently re-verifies the JWT and role via <code>protect</code>/<code>authorize</code>.</li>
+    <li><strong>AI features are grounded, not freeform.</strong> Givi (chat), Service Dashboard outreach drafts,
+      and the AI Lead Finder's email/proposal generation all pull live data from MongoDB via one shared
+      <code>buildServiceContext()</code> helper, rather than letting the model invent facts or three copies of
+      "what services do we offer" drift apart.</li>
+    <li><strong>Two independent logging layers.</strong> <code>morgan</code> (raw HTTP) and <code>activityLogger</code>
+      (semantic audit trail) are separate, composable middleware.</li>
+    <li><strong>Security controls are detection-driven, not just preventive.</strong> Rate limits, brute-force
+      lockout, and content screening all feed one <code>SecurityEvent</code> log; <code>registerViolation()</code>
+      correlates violations <em>across</em> endpoints per IP (a bad login + a flagged chat message count toward
+      the same auto-block threshold), not just per-route.</li>
+    <li><strong>Fail-safe over fail-silent for money.</strong> See §6 — a failed refund never leaves the system
+      in a state that implies success.</li>
+    <li><strong>Price floor enforced where the money moves, not just the UI.</strong> The request-project form
+      mirrors the ₹5,000-below-<code>basePrice</code> floor for UX, but <code>create-order</code> re-derives and
+      enforces it server-side independently.</li>
+    <li><strong>New data-gathering features are scoped to what's actually legal to automate.</strong> The AI
+      Business Lead Finder discovers businesses via Google's official, ToS-compliant Places API rather than
+      scraping Maps/Justdial; the New Business Monitor is CSV-import/manual-entry only, since India's MCA
+      registry has no free bulk API. Both constraints are surfaced directly in the admin UI's own copy.</li>
+    <li><strong>Theme system is CSS-variable-driven.</strong> Almost everything adapts to light/dark automatically.
+      Only real WebGL/Canvas scenes need an explicit per-theme JS color palette.</li>
+  </ul>
+</section>
+
+</main>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: "dark" });
+</script>
+</body>
+</html>

@@ -1,0 +1,405 @@
+import express from "express";
+import crypto from "crypto";
+import Razorpay from "razorpay";
+import { timingSafeEqual } from "../utils/safeCompare.js";
+import Order from "../models/Order.js";
+import Pricing from "../models/Pricing.js";
+import { protect } from "../middleware/auth.js";
+import { authorize } from "../middleware/role.js";
+import { sendEmail } from "../utils/sendEmail.js";
+import { asyncHandler } from "../middleware/asyncHandler.js";
+import { generateInvoicePdf } from "../utils/generateInvoicePdf.js";
+
+const router = express.Router();
+
+const getRazorpayClient = () =>
+  new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+
+// How far below a tier's listed base price a client can self-select when
+// requesting a project — enforced here (the real boundary) as well as
+// mirrored in the frontend form (ClientDashboard.jsx) for instant feedback.
+// A tier with no basePrice set (or service "other") has no enforced floor.
+const PRICE_FLOOR_DISCOUNT = 5000;
+
+// @route   POST /api/payments/create-order
+// @desc    Client creates a service order + a Razorpay order to pay for it
+router.post("/create-order", protect, async (req, res) => {
+  try {
+    const { service, title, description, amount } = req.body; // amount in rupees
+
+    if (!service || !title || !amount) {
+      return res.status(400).json({ message: "service, title and amount are required" });
+    }
+    // Independent of any tier floor below — no service should ever accept a
+    // zero, negative, or non-numeric amount, regardless of what tier (if
+    // any) it matches. Razorpay would likely reject a negative amount on
+    // its own, but that's not a business-logic guarantee we control.
+    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ message: "Amount must be a positive number" });
+    }
+
+    const tier = await Pricing.findOne({ serviceKey: service, isActive: true });
+    if (tier?.basePrice) {
+      const floor = tier.basePrice - PRICE_FLOOR_DISCOUNT;
+      if (amount < floor) {
+        return res.status(400).json({
+          message: `The amount for ${tier.name} can't be lower than ₹${floor.toLocaleString("en-IN")} (up to ₹${PRICE_FLOOR_DISCOUNT.toLocaleString("en-IN")} below the ₹${tier.basePrice.toLocaleString("en-IN")} starting price).`,
+        });
+      }
+    }
+
+    const amountInPaise = Math.round(amount * 100);
+
+    const order = await Order.create({
+      client: req.user._id,
+      service,
+      title,
+      description,
+      amount: amountInPaise,
+    });
+
+    const rzpClient = getRazorpayClient();
+    const rzpOrder = await rzpClient.orders.create({
+      amount: amountInPaise,
+      currency: "INR",
+      receipt: order._id.toString(),
+    });
+
+    order.razorpayOrderId = rzpOrder.id;
+    await order.save();
+
+    res.status(201).json({
+      orderId: order._id,
+      razorpayOrderId: rzpOrder.id,
+      amount: amountInPaise,
+      currency: "INR",
+      keyId: process.env.RAZORPAY_KEY_ID,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Could not create payment order", error: err.message });
+  }
+});
+
+// @route   POST /api/payments/verify
+// @desc    Verify Razorpay payment signature after checkout completes on the frontend
+router.post("/verify", protect, async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
+
+    if (!timingSafeEqual(expectedSignature, razorpay_signature)) {
+      return res.status(400).json({ message: "Payment verification failed - signature mismatch" });
+    }
+
+    // Scoped to the caller's own order — this is always called by the
+    // client right after their own checkout completes, so a different
+    // authenticated user's (order_id, payment_id, signature) triple
+    // (however they came by it) can't be replayed to flip someone else's
+    // order to "paid" under a session that isn't theirs.
+    const order = await Order.findOneAndUpdate(
+      { razorpayOrderId: razorpay_order_id, client: req.user._id },
+      { paymentStatus: "paid", razorpayPaymentId: razorpay_payment_id, status: "in-progress" },
+      { new: true }
+    );
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found for this payment" });
+    }
+
+    res.json({ message: "Payment verified", order });
+  } catch (err) {
+    res.status(500).json({ message: "Verification failed", error: err.message });
+  }
+});
+
+// @route   POST /api/payments/webhook
+// @desc    Razorpay server-to-server webhook (configure in Razorpay dashboard).
+//          Mount this route with express.raw() in server.js, NOT express.json().
+router.post("/webhook", asyncHandler(async (req, res) => {
+  const webhookSignature = req.headers["x-razorpay-signature"];
+  const expected = crypto
+    .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET)
+    .update(req.body) // raw buffer
+    .digest("hex");
+
+  if (!timingSafeEqual(webhookSignature, expected)) {
+    return res.status(400).json({ message: "Invalid webhook signature" });
+  }
+
+  const event = JSON.parse(req.body.toString());
+
+  if (event.event === "payment.captured") {
+    const rzpOrderId = event.payload.payment.entity.order_id;
+    await Order.findOneAndUpdate(
+      { razorpayOrderId: rzpOrderId },
+      { paymentStatus: "paid", status: "in-progress" }
+    );
+  }
+
+  // Refunds aren't always instant — /orders/:id/cancel below already sets
+  // paymentStatus to "refund-pending" (or "refunded" if Razorpay confirmed
+  // it synchronously) the moment a refund is issued. This event is the
+  // async confirmation once Razorpay actually finishes processing it,
+  // independent of whether the browser that requested the cancellation is
+  // still open.
+  if (event.event === "refund.processed") {
+    const refundEntity = event.payload.refund.entity;
+    await Order.findOneAndUpdate(
+      { refundId: refundEntity.id },
+      { paymentStatus: "refunded", refundStatus: "processed" }
+    );
+  }
+
+  res.status(200).json({ received: true });
+}));
+
+// @route   GET /api/payments/orders
+// @desc    Admin: view all orders. Client: view own orders.
+router.get("/orders", protect, asyncHandler(async (req, res) => {
+  const filter = req.user.role === "client" ? { client: req.user._id } : {};
+  const orders = await Order.find(filter)
+    .populate("client", "name email company")
+    .sort({ createdAt: -1 });
+  res.json({ orders });
+}));
+
+// @route   GET /api/payments/orders/:id
+// @desc    Full detail for a single order, including its progress timeline.
+//          Clients can only fetch their own order; admins can fetch any.
+router.get("/orders/:id", protect, asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id)
+    .populate("client", "name email company")
+    .populate("progressUpdates.postedBy", "name role");
+
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  const isOwner = order.client?._id?.toString() === req.user._id.toString();
+  if (req.user.role === "client" && !isOwner) {
+    return res.status(403).json({ message: "Not authorized to view this order" });
+  }
+
+  res.json({ order });
+}));
+
+// @route   GET /api/payments/orders/:id/invoice
+// @desc    Download a PDF invoice — only once an order has actually been
+//          paid (or paid-then-refunded; the PDF still reflects what was
+//          genuinely charged, with the refund noted separately rather than
+//          rewriting history). Same ownership rule as the detail route above.
+router.get("/orders/:id/invoice", protect, asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id).populate("client", "name email company");
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  const isOwner = order.client?._id?.toString() === req.user._id.toString();
+  if (req.user.role === "client" && !isOwner) {
+    return res.status(403).json({ message: "Not authorized to view this invoice" });
+  }
+  if (!["paid", "refunded", "refund-pending"].includes(order.paymentStatus)) {
+    return res.status(400).json({ message: "An invoice is only available once a payment has been made" });
+  }
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="GivsiaTech-Invoice-${order.invoiceNumber}.pdf"`);
+  generateInvoicePdf(order, res);
+}));
+
+// @route   POST /api/payments/orders/:id/progress
+// @desc    Admin: post a progress update on an order's timeline.
+//          Optionally also updates the order's overall status and/or
+//          completion percentage. This is what powers the client-facing
+//          project status view and progress bar.
+router.post("/orders/:id/progress", protect, authorize("admin"), asyncHandler(async (req, res) => {
+  const { note, status, progressPercent } = req.body;
+  if (!note) return res.status(400).json({ message: "A note is required" });
+  if (status && !["pending", "in-progress", "completed", "cancelled"].includes(status)) {
+    return res.status(400).json({ message: "Invalid status" });
+  }
+  if (progressPercent !== undefined && (progressPercent < 0 || progressPercent > 100)) {
+    return res.status(400).json({ message: "Progress percent must be between 0 and 100" });
+  }
+
+  const order = await Order.findById(req.params.id).populate("client", "name email");
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  order.progressUpdates.push({ note, status, postedBy: req.user._id });
+  if (status) order.status = status;
+  if (progressPercent !== undefined) order.progressPercent = progressPercent;
+  else if (status === "completed") order.progressPercent = 100; // completed always reads as 100% even if no explicit percent was given
+  await order.save();
+
+  sendEmail({
+    to: order.client?.email,
+    subject: `Update on your project: ${order.title}`,
+    text: `${note}${status ? `\n\nStatus: ${status}` : ""}`,
+  });
+
+  res.status(201).json({ order });
+}));
+
+const CANCEL_WINDOW_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
+
+// @route   PATCH /api/payments/orders/:id/cancel
+// @desc    Client: cancel their own project, but only within 2 days of
+//          requesting it. After that window they're pointed to support
+//          instead — self-serve cancellation stays blocked at the API
+//          level regardless of what the frontend allows.
+router.patch("/orders/:id/cancel", protect, asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id);
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  if (!order.client || order.client.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ message: "Not authorized to cancel this project" });
+  }
+  if (["completed", "cancelled"].includes(order.status)) {
+    return res.status(400).json({ message: `This project is already ${order.status} and can't be cancelled` });
+  }
+  if (Date.now() - order.createdAt.getTime() > CANCEL_WINDOW_MS) {
+    return res.status(400).json({
+      message: "The 2-day self-cancellation window has passed. Please contact support to request a cancellation.",
+    });
+  }
+
+  // If money already changed hands, issue a real refund before touching
+  // anything else — if Razorpay's API call fails, the order is left exactly
+  // as it was (still "in-progress", not cancelled) instead of telling the
+  // client "cancelled" while secretly having no refund behind it. That kind
+  // of silent gap is worse than the cancel button failing outright and
+  // pointing them at support.
+  let refund = null;
+  if (order.paymentStatus === "paid") {
+    const rzpClient = getRazorpayClient();
+    try {
+      refund = await rzpClient.payments.refund(order.razorpayPaymentId, {
+        amount: order.amount, // full refund, in paise — same unit as the original charge
+        speed: "optimum", // instant if Razorpay/the bank supports it for this payment, else normal
+        notes: { reason: "Client self-cancelled within the 48-hour window", orderId: order._id.toString() },
+      });
+    } catch (err) {
+      return res.status(502).json({
+        message: "Could not process your refund automatically — please contact support and we'll sort it out manually.",
+        error: err.error?.description || err.message,
+      });
+    }
+
+    order.refundId = refund.id;
+    order.refundStatus = refund.status;
+    order.refundAmount = refund.amount;
+    order.refundedAt = new Date();
+    order.paymentStatus = refund.status === "processed" ? "refunded" : "refund-pending";
+  }
+
+  order.status = "cancelled";
+  order.progressUpdates.push({
+    note: refund ? `Cancelled by client — refund of ${(refund.amount / 100).toLocaleString("en-IN")} INR initiated` : "Cancelled by client",
+    status: "cancelled",
+    postedBy: req.user._id,
+  });
+  await order.save();
+
+  sendEmail({
+    to: req.user.email,
+    subject: `Your project "${order.title}" was cancelled`,
+    text: refund
+      ? `Your project has been cancelled and a refund of Rs. ${(refund.amount / 100).toLocaleString("en-IN")} has been initiated to your original payment method. It can take a few business days to reflect, depending on your bank.`
+      : `Your project has been cancelled as requested.`,
+  });
+
+  res.json({ order, refund });
+}));
+
+// @route   POST /api/payments/orders/manual
+// @desc    Admin: manually log a project — for deals made offline (phone,
+//          in person, etc.) as well as recording full project detail
+//          (description, tech stack) for an existing online order. If the
+//          client already has an account, link it via clientId; otherwise
+//          pass manualClientName/Phone/Email for a walk-in with no account.
+router.post("/orders/manual", protect, authorize("admin"), asyncHandler(async (req, res) => {
+  const {
+    clientId,
+    manualClientName,
+    manualClientPhone,
+    manualClientEmail,
+    service,
+    title,
+    description,
+    techStack,
+    amount,
+    status,
+    progressPercent,
+    paymentStatus,
+    image,
+  } = req.body;
+
+  if (!title || !amount) {
+    return res.status(400).json({ message: "Title and amount are required" });
+  }
+  if (!clientId && !manualClientName) {
+    return res.status(400).json({ message: "Either an existing client or a manual client name is required" });
+  }
+
+  const order = await Order.create({
+    client: clientId || undefined,
+    manualClient: clientId ? undefined : { name: manualClientName, phone: manualClientPhone, email: manualClientEmail },
+    source: "offline",
+    service: service || "other",
+    title,
+    description,
+    techStack: Array.isArray(techStack) ? techStack : [],
+    amount: Math.round(Number(amount) * 100),
+    status: status || "completed",
+    progressPercent: progressPercent ?? (status === "completed" || !status ? 100 : 0),
+    paymentStatus: paymentStatus || "paid",
+    image: image || undefined,
+  });
+
+  res.status(201).json({ order });
+}));
+
+// @route   DELETE /api/payments/orders/:id
+// @desc    Admin: permanently remove a project/order record.
+router.delete("/orders/:id", protect, authorize("admin"), asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id);
+  if (!order) return res.status(404).json({ message: "Order not found" });
+  await order.deleteOne();
+  res.json({ message: "Order deleted" });
+}));
+
+// @route   PATCH /api/payments/orders/:id/status
+// @desc    Admin: update an order's progress status
+router.patch("/orders/:id/status", protect, authorize("admin"), asyncHandler(async (req, res) => {
+  const { status } = req.body;
+  if (!["pending", "in-progress", "completed", "cancelled"].includes(status)) {
+    return res.status(400).json({ message: "Invalid status" });
+  }
+  const order = await Order.findByIdAndUpdate(req.params.id, { status }, { new: true });
+  if (!order) return res.status(404).json({ message: "Order not found" });
+  res.json({ order });
+}));
+
+// @route   PATCH /api/payments/orders/:id/publish-details
+// @desc    Admin: record the project image and domain/hosting info once
+//          work is done — required before the project can be published to
+//          the public Work section (see portfolioRoutes.js from-order),
+//          and doubles as renewal-monitoring data in the admin dashboard.
+router.patch("/orders/:id/publish-details", protect, authorize("admin"), asyncHandler(async (req, res) => {
+  const { image, domain, hostingProvider, domainExpiryDate, hostingExpiryDate } = req.body;
+  const update = {};
+  if (image !== undefined) update.image = image;
+  if (domain !== undefined) update.domain = domain;
+  if (hostingProvider !== undefined) update.hostingProvider = hostingProvider;
+  if (domainExpiryDate !== undefined) update.domainExpiryDate = domainExpiryDate || null;
+  if (hostingExpiryDate !== undefined) update.hostingExpiryDate = hostingExpiryDate || null;
+
+  const order = await Order.findByIdAndUpdate(req.params.id, update, { new: true });
+  if (!order) return res.status(404).json({ message: "Order not found" });
+  res.json({ order });
+}));
+
+export default router;

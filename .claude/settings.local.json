@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(cp -r ../pw/node_modules .)",
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Bash(node test.mjs)"
+    ]
+  }
+}

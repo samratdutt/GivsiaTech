@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GivsiaTech — Development Log</title>
+<style>
+  :root {
+    --bg: #0b0a12;
+    --surface: #16131f;
+    --surface2: #1c1829;
+    --border: #2c2538;
+    --text: #f1eefc;
+    --text-dim: #a89fc7;
+    --accent: #c3aeff;
+    --accent2: #ffd94d;
+    --green: #7ee787;
+    --red: #ff8787;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Roboto, -apple-system, sans-serif;
+    line-height: 1.65;
+  }
+  header {
+    padding: 40px 24px 20px;
+    max-width: 980px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.9rem;
+    margin: 0 0 8px;
+    background: linear-gradient(100deg, var(--accent2), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .note {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    max-width: 680px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 14px;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 0 24px 60px; }
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+    font-size: 0.88rem;
+  }
+  nav.toc h2 { margin: 0 0 10px; font-size: 1rem; color: var(--accent2); }
+  nav.toc ol { margin: 0; padding-left: 20px; columns: 2; color: var(--text-dim); }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 26px 28px;
+    margin-bottom: 28px;
+    scroll-margin-top: 20px;
+  }
+  h2 {
+    font-size: 1.3rem;
+    margin: 0 0 6px;
+    color: var(--accent2);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  h2 .num { color: var(--text-dim); font-size: 1rem; }
+  h3 { font-size: 1rem; margin: 22px 0 8px; color: var(--accent); }
+  p { color: var(--text-dim); font-size: 0.92rem; }
+  p.summary { color: var(--text); font-size: 0.95rem; margin-top: 4px; }
+  code {
+    background: rgba(255,255,255,0.07);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #ffe08a;
+  }
+  pre {
+    background: #0d0b14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; color: #dcd6f7; }
+  .err {
+    border-left: 3px solid var(--red);
+    background: rgba(255, 135, 135, 0.08);
+  }
+  .err code, .err pre code { color: #ffb3b3; }
+  .fix-label, .err-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: inline-block;
+  }
+  .err-label { color: var(--red); }
+  .fix-label { color: var(--green); }
+  ul, ol.plain { color: var(--text-dim); font-size: 0.9rem; padding-left: 22px; }
+  ul li, ol.plain li { margin-bottom: 6px; }
+  ul li strong, ol.plain li strong { color: var(--text); }
+  .shots {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 16px 0;
+  }
+  .shots.single { grid-template-columns: 1fr; max-width: 620px; }
+  figure { margin: 0; }
+  figure img {
+    width: 100%;
+    display: block;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  figcaption {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-top: 6px;
+    text-align: center;
+  }
+  .tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    margin-right: 6px;
+    margin-bottom: 10px;
+  }
+  .files { font-size: 0.85rem; color: var(--text-dim); margin: 10px 0; }
+  .files code { color: var(--accent); }
+  footer {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+    color: var(--text-dim);
+    font-size: 0.82rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>GivsiaTech — Development Log</h1>
+  <p class="note">
+    Internal reference only — generated from the actual conversation and code changes made during this development
+    session. Lives in <code>docs/</code>, outside <code>frontend/src</code> and <code>frontend/public</code>, so
+    Vite never bundles it and nothing on this page is served on the live website. Keep it locally; do not publish it.
+  </p>
+</header>
+
+<main>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#givi-chatbot">Givi chatbot — site-wide Q&amp;A + refresh</a></li>
+    <li><a href="#outreach-delete">Outreach history delete</a></li>
+    <li><a href="#eaddrinuse">Recurring port 5000 (EADDRINUSE) crashes</a></li>
+    <li><a href="#whatsapp">WhatsApp integration, then removal</a></li>
+    <li><a href="#start-project">"Start a project" role-aware routing fix</a></li>
+    <li><a href="#otp-ui">Electric-embossed OTP verification UI</a></li>
+    <li><a href="#loading-screen">3D loading screen</a></li>
+    <li><a href="#toasts">Sitewide toast notifications</a></li>
+    <li><a href="#cookie-consent">Cookie consent redesign(s)</a></li>
+    <li><a href="#architecture-docs">Architecture diagrams (private)</a></li>
+    <li><a href="#navigator">AI website navigation assistant</a></li>
+    <li><a href="#security">Security hardening — Phase 1</a></li>
+    <li><a href="#app-dev">App Development — 4th service line</a></li>
+    <li><a href="#invoice-refund">Invoice PDFs + real refund architecture</a></li>
+    <li><a href="#price-floor">Client-set price floor (₹5,000 below base price)</a></li>
+    <li><a href="#live-validation">Live email/phone validation (red/green indicators)</a></li>
+    <li><a href="#gemini-thinking-bug">Gemini regression — thinkingConfig broke Givi, outreach, and lead AI</a></li>
+    <li><a href="#bizlead">AI Business Lead Finder + New Business Monitor</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<section id="givi-chatbot">
+  <h2><span class="num">01</span> Givi chatbot — site-wide Q&amp;A + refresh</h2>
+  <span class="tag">backend/routes/chatRoutes.js</span>
+  <span class="tag">frontend/GiviChat.jsx</span>
+  <p class="summary">
+    Request: make Givi answer questions about any section of the site using real backend data, without ever leaking
+    personal/protected details, add a refresh (new conversation) button, quick-suggestion chips, and a stronger,
+    more attractive interface.
+  </p>
+  <h3>What changed</h3>
+  <ul>
+    <li><code>buildKnowledgeContext()</code> pulls live Pricing, Portfolio, and CompanyInfo documents from MongoDB into the system prompt so Givi answers from real data instead of inventing facts.</li>
+    <li>A <code>HARD RULE</code> block in the system prompt permanently forbids revealing accounts, emails, phone numbers, credentials, orders/payments, invite codes, API keys, or any backend internals — this block was preserved verbatim through every later rewrite of the prompt.</li>
+    <li><code>frontend/src/components/GiviChat.jsx</code>: added a refresh/"new conversation" icon button, animated typing-dots indicator, quick-suggestion chips shown on a fresh conversation, and chat-bubble entrance animation.</li>
+  </ul>
+  <h3>Refresh button</h3>
+  <pre><code>const startNewChat = () => {
+  setMessages([GREETING]);
+  setInput("");
+  setLoading(false);
+};</code></pre>
+</section>
+
+<!-- 2 -->
+<section id="outreach-delete">
+  <h2><span class="num">02</span> Outreach history — delete option</h2>
+  <span class="tag">backend/routes/outreachRoutes.js</span>
+  <span class="tag">ServiceDashboard.jsx</span>
+  <p class="summary">Request: add a delete option on every row of the Service Dashboard's outreach history.</p>
+  <pre><code>// backend/routes/outreachRoutes.js
+router.delete("/:id", protect, authorize("service", "admin"), async (req, res) => {
+  const record = await Outreach.findOneAndDelete({ _id: req.params.id, sentBy: req.user._id });
+  if (!record) return res.status(404).json({ message: "Not found" });
+  res.json({ message: "Deleted" });
+});</code></pre>
+  <p>Frontend calls <code>DELETE /outreach/:id</code> per row and shows a toast on failure (see §7).</p>
+</section>
+
+<!-- 3 -->
+<section id="eaddrinuse">
+  <h2><span class="num">03</span> Recurring port 5000 crashes</h2>
+  <span class="tag">operational</span>
+  <p class="summary">
+    This error was reported and fixed roughly five separate times across the session:
+  </p>
+  <div class="err">
+    <span class="err-label">Error</span>
+    <pre><code>Error: listen EADDRINUSE: address already in use :::5000
+    at Server.setupListenHandle [as _listen2] (node:net:1817:16)
+    ...
+    at server.js:116</code></pre>
+  </div>
+  <p><strong>Root cause:</strong> every time, it was a leftover background <code>node server.js</code> / <code>nodemon</code>
+  process from my own automated verification steps (started with <code>&amp;</code>/<code>disown</code> during
+  Playwright testing) still holding port 5000, colliding with the user's own terminal-launched nodemon.</p>
+  <div class="fix-label">Fix pattern (repeated identically each time)</div>
+  <pre><code>lsof -nP -iTCP:5000 -sTCP:LISTEN
+ps aux | grep -E "nodemon|node server.js" | grep -v grep
+# distinguish "no tty (??)" == mine, vs a real tty (s00x) == the user's own terminal
+kill &lt;my-orphaned-pids&gt;
+lsof -nP -iTCP:5000 -sTCP:LISTEN || echo "port 5000 free"</code></pre>
+  <p>The user's own nodemon process was always left untouched; they only needed to save a file or type
+  <code>rs</code> in their terminal to bring it back up once the port was free.</p>
+  <div class="fix-label">Permanent fix — self-healing predev/prestart hook</div>
+  <p>Manually diagnosing and killing the stale process every single time wasn't sustainable, so the port is now
+  cleared automatically before the server ever tries to bind it — regardless of whose leftover process is
+  holding it.</p>
+  <pre><code>// backend/scripts/freePort.js
+const port = Number(process.env.PORT) || 5000;
+try {
+  await kill(port, "tcp"); // kill-port package
+  console.log(`[freePort] Cleared anything that was on port ${port}`);
+} catch {
+  console.log(`[freePort] Port ${port} was already free`);
+}</code></pre>
+  <pre><code>// backend/package.json
+"scripts": {
+  "predev": "node scripts/freePort.js",
+  "dev": "nodemon server.js",
+  "prestart": "node scripts/freePort.js",
+  "start": "node server.js"
+}</code></pre>
+  <p>npm runs <code>pre&lt;script&gt;</code> automatically before the matching script, so every
+  <code>npm run dev</code> / <code>npm start</code> now self-heals with no manual intervention. Verified by
+  deliberately starting a second instance on top of a running one — it logged
+  <code>[freePort] Cleared anything that was on port 5000</code> and started clean instead of crashing.
+  One caveat: this only runs at the <em>start</em> of an <code>npm run</code> invocation — a terminal already
+  sitting in nodemon's crashed "waiting for file changes" state from <em>before</em> this fix existed still
+  needs one manual <code>rs</code> to recover, since nodemon doesn't retry on its own just because the port
+  later became free.</p>
+</section>
+
+<!-- 4 -->
+<section id="whatsapp">
+  <h2><span class="num">04</span> WhatsApp integration — added, then fully removed</h2>
+  <span class="tag">backend/utils/sendWhatsApp.js (deleted)</span>
+  <span class="tag">Meta Cloud API</span>
+  <p class="summary">
+    This feature went through three stages in one session: WhatsApp OTP verification was built, then explicitly
+    removed; a WhatsApp cold-outreach sender for the Service panel was built (with real Meta credentials configured
+    live), then explicitly removed as well, leaving the Service panel email-only.
+  </p>
+  <h3>Stage 1 — WhatsApp OTP added, then removed</h3>
+  <p>User: <em>"Remove the whatsapp code verification system"</em> — reverted <code>/send-otp</code> to SMS
+  (Twilio) with a dev-mode fallback code only.</p>
+  <h3>Stage 2 — WhatsApp outreach added, then removed</h3>
+  <p>User provided real Meta Cloud API credentials (phone number ID, business account ID, access token), which
+  were written to <code>backend/.env</code> and wired into <code>backend/utils/sendWhatsApp.js</code> and
+  <code>outreachRoutes.js</code> (the <code>Outreach</code> model's <code>channel</code> field supported
+  <code>"email" | "whatsapp"</code>). User then said: <em>"Remove the whatsapp auto message sending system from
+  service panel."</em></p>
+  <div class="fix-label">Final state</div>
+  <ul>
+    <li><code>backend/utils/sendWhatsApp.js</code> deleted entirely</li>
+    <li><code>Outreach.channel</code> field removed — email-only from here on</li>
+    <li>WhatsApp env vars removed from <code>backend/.env</code> / <code>.env.example</code> with explanatory comments</li>
+    <li><code>ServiceDashboard.jsx</code> simplified back to a single email-send flow</li>
+  </ul>
+</section>
+
+<!-- 5 -->
+<section id="start-project">
+  <h2><span class="num">05</span> "Start a project" — role-aware routing fix</h2>
+  <span class="tag">frontend/src/pages/Home.jsx</span>
+  <p class="summary">
+    Bug: the "Start a project" button always sent everyone to <code>/register</code>, regardless of whether they
+    were already logged in, and regardless of role.
+  </p>
+  <div class="err">
+    <span class="err-label">Reported symptom</span>
+    <p style="margin:0">"Whenever I click on start a project button it's not go to the project request section for
+    client / not go to the project management in admin dashboard for admin / not showing can't request a project by
+    service management in service account, after being logged in it's still go to the login page for all user."</p>
+  </div>
+  <div class="fix-label">Fix</div>
+  <pre><code>// Home.jsx
+const handleStartProject = () => {
+  if (!user) return navigate("/register");
+  if (user.role === "client") return navigate("/dashboard/client#request-project");
+  if (user.role === "admin") return navigate("/dashboard/admin?tab=orders");
+  if (user.role === "service") {
+    return showToast(
+      "Service accounts can't request a project — that's only available for clients. " +
+      "Use the Service Dashboard to send outreach instead.",
+      "info"
+    );
+  }
+};</code></pre>
+  <p><code>ClientDashboard.jsx</code> was updated with a <code>#request-project</code> anchor and a
+  <code>useEffect</code> that auto-opens and scrolls to that panel on load. <code>AdminDashboard.jsx</code> reads a
+  <code>?tab=</code> query param to jump straight to the Orders tab.</p>
+</section>
+
+<!-- 6 -->
+<section id="otp-ui">
+  <h2><span class="num">06</span> Electric-embossed OTP verification UI</h2>
+  <span class="tag">frontend/src/components/OtpBoxes.jsx</span>
+  <span class="tag">Register.jsx</span>
+  <p class="summary">
+    Request: a themed 3D "electric embossed" 6-digit OTP box animation for phone verification during registration,
+    matching separate dark/light color palettes from reference screenshots.
+  </p>
+  <ul>
+    <li>New <code>OtpBoxes.jsx</code>: 6 individual boxed digit inputs, auto-advance on type, backspace-to-previous,
+    arrow-key navigation, full paste support (pasting a 6-digit code fills all boxes at once).</li>
+    <li><code>Register.jsx</code> reworked into 3 tabs (client / admin / service), OTP step now uses
+    <code>OtpBoxes</code> followed by an animated checkmark reveal on success, replacing the old plain-text
+    confirmation.</li>
+    <li>CSS: embossed glow / electric border-pulse styles added to <code>index.css</code>, themed separately for
+    dark and light.</li>
+  </ul>
+</section>
+
+<!-- 7 -->
+<section id="loading-screen">
+  <h2><span class="num">07</span> 3D loading screen</h2>
+  <span class="tag">frontend/src/components/LoadingScreen.jsx</span>
+  <p class="summary">
+    Request: a 3D loading animation shown on initial page load/refresh, later refined to use separate palettes per
+    theme — "white for clear visibility" in dark mode, "dark prussian blue with black" in light mode.
+  </p>
+  <p>A React Three Fiber wireframe crystal with a glowing core and a progress tween; a theme-aware <code>PALETTE</code>
+  object supplies literal hex colors (dark: lavender/yellow; light: prussian blue <code>#003153</code>/black) since
+  Three.js materials require real color values rather than CSS variables.</p>
+  <h3>Bug: gradient text-clip silently broken by key ordering</h3>
+  <p>Setting <code>background</code> (shorthand) on a style object after <code>backgroundClip</code> /
+  <code>WebkitBackgroundClip</code> (longhand) were already present as keys reset the gradient text-clip effect,
+  because <code>background</code> wasn't already a key in the base object and so landed after them in property
+  application order.</p>
+  <div class="fix-label">Fix — pin the key's position by pre-declaring it</div>
+  <pre><code>const baseStyle = {
+  background: undefined, // reserves this key's position ahead of backgroundClip
+  WebkitBackgroundClip: "text",
+  backgroundClip: "text",
+  ...
+};</code></pre>
+  <div class="shots">
+    <figure>
+      <img src="screenshots/loading-screen-dark.png" alt="Loading screen, dark theme" />
+      <figcaption>Dark theme — lavender/yellow wireframe palette</figcaption>
+    </figure>
+    <figure>
+      <img src="screenshots/loading-screen-light.png" alt="Loading screen, light theme" />
+      <figcaption>Light theme — prussian blue / black palette</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 8 -->
+<section id="toasts">
+  <h2><span class="num">08</span> Sitewide toast notifications (replacing window.alert)</h2>
+  <span class="tag">frontend/src/context/ToastContext.jsx</span>
+  <span class="tag">ToastStack.jsx</span>
+  <p class="summary">
+    Request: replace every <code>window.alert()</code> across the site with small, non-intrusive, animated
+    top-of-screen toasts, themed for light and dark. In total, 16 call sites across <code>Home.jsx</code>,
+    <code>ClientDashboard.jsx</code>, <code>ServiceDashboard.jsx</code>, and 6 sub-components inside
+    <code>AdminDashboard.jsx</code> (Orders, Reviews, Users, Leads, Pricing, Portfolio tabs) were converted.
+  </p>
+  <h3>Core implementation</h3>
+  <pre><code>// ToastContext.jsx
+const showToast = useCallback((message, type = "info", duration = 4500) => {
+  const id = Date.now() + Math.random();
+  setToasts((t) => [...t, { id, message, type }]);
+  setTimeout(() => dismiss(id), duration);
+}, []);</code></pre>
+  <p>Two-phase dismiss: a <code>leaving</code> flag is set first, then the toast is actually removed from state
+  after a 300ms CSS exit-transition (<code>EXIT_DURATION_MS</code>), so the slide/fade-out animation has time to run.</p>
+  <div class="shots">
+    <figure>
+      <img src="screenshots/toast-dark.png" alt="Toast notifications, dark theme" />
+      <figcaption>Success + error toasts, dark theme — top-of-screen, non-blocking</figcaption>
+    </figure>
+    <figure>
+      <img src="screenshots/toast-light.png" alt="Toast notification, light theme" />
+      <figcaption>Info toast, light theme (the "Start a project" service-account block message from §5)</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 9 -->
+<section id="cookie-consent">
+  <h2><span class="num">09</span> Cookie consent — designed, then redesigned</h2>
+  <span class="tag">frontend/src/components/CookieConsent.jsx</span>
+  <p class="summary">
+    This went through two full redesigns. First: a 3D Three.js cookie based on a Dribbble "bitten cookie" reference,
+    themed to match the site. Second (final): the user asked to remove the 3D cookie and rebuild based on a new,
+    generic bottom-sheet reference image that had no actual cookie graphic in it — dark mode required a white icon
+    "for clear visibility," light theme required "dark blue like the logo colour."
+  </p>
+  <h3>Clarifying the ambiguous second reference</h3>
+  <p>
+    The second reference screenshot showed a generic "Cookie settings" bottom sheet with no cookie artwork, and the
+    real site logo is purple/gold, not blue — so before rebuilding, three questions were asked and confirmed:
+  </p>
+  <ol class="plain">
+    <li>Icon style → <strong>simple flat cookie icon</strong> (not photorealistic/3D)</li>
+    <li>"Logo blue" → <strong>the light theme's existing accent blue</strong>, <code>#0077b6</code></li>
+    <li>Layout → <strong>match the reference's bottom-sheet</strong> with Customize / Reject / Accept buttons</li>
+  </ol>
+  <h3>Final implementation</h3>
+  <p>Three.js dropped entirely — a flat inline SVG <code>CookieIcon()</code> (outline body + bite notch + 4 crumb
+  dots) colored via a CSS variable so it repaints per theme automatically:</p>
+  <pre><code>// index.css
+:root                    { --cookie-icon-color: #ffffff; }        /* dark theme */
+:root[data-theme="light"] { --cookie-icon-color: var(--lavender); } /* → #0077b6 */
+
+// CookieIcon.jsx
+&lt;svg stroke="currentColor" ...&gt;   /* inherits color: var(--cookie-icon-color) */</code></pre>
+  <div class="shots">
+    <figure>
+      <img src="screenshots/cookie-bar-dark.png" alt="Cookie consent bar, dark theme" />
+      <figcaption>Dark theme — white icon for visibility against the dark background</figcaption>
+    </figure>
+    <figure>
+      <img src="screenshots/cookie-bar-light.png" alt="Cookie consent bar, light theme" />
+      <figcaption>Light theme — accent blue (#0077b6) icon</figcaption>
+    </figure>
+  </div>
+  <div class="shots single">
+    <figure>
+      <img src="screenshots/cookie-bar-customize.png" alt="Cookie preferences sub-view" />
+      <figcaption>"Customize" opens a preferences sub-view (Essential locked on, Analytics toggle) with Back / Save preferences</figcaption>
+    </figure>
+  </div>
+  <h3>Bug found during verification: bar blocked the chat launcher</h3>
+  <div class="err">
+    <span class="err-label">Error (Playwright click)</span>
+    <pre><code>&lt;div class="cookie-bar"&gt; intercepts pointer events</code></pre>
+  </div>
+  <p>The bottom-anchored cookie bar visually overlapped the bottom-anchored chat FAB. First attempt used a plain
+  class rule, which silently did nothing:</p>
+  <pre><code>/* did NOT work — GiviChat sets bottom:28 via inline style={styles.fab},
+   which always outranks a class selector without !important */
+body.cookie-bar-open .chat-fab { bottom: 128px; }</code></pre>
+  <div class="fix-label">Fix — matched the existing !important pattern already used for this component's mobile override</div>
+  <pre><code>body.cookie-bar-open .chat-fab   { bottom: 128px !important; }
+body.cookie-bar-open .chat-panel { bottom: 196px !important; }
+@media (max-width: 700px) {
+  body.cookie-bar-open .chat-fab   { bottom: 190px !important; }
+  body.cookie-bar-open .chat-panel { bottom: 258px !important; }
+}</code></pre>
+  <p>Verified via <code>getComputedStyle(fab).bottom</code> flipping from <code>"28px"</code> to <code>"128px"</code>
+  once the cookie bar mounts, driven by a body class toggled from <code>CookieConsent.jsx</code>:</p>
+  <pre><code>useEffect(() => {
+  document.body.classList.toggle("cookie-bar-open", visible);
+  return () => document.body.classList.remove("cookie-bar-open");
+}, [visible]);</code></pre>
+</section>
+
+<!-- 10 -->
+<section id="architecture-docs">
+  <h2><span class="num">10</span> Architecture &amp; control-flow diagrams (private, local-only)</h2>
+  <span class="tag">docs/ARCHITECTURE.md</span>
+  <span class="tag">docs/architecture.html</span>
+  <p class="summary">
+    Request: "generate pictorial representation of control flow and inner architecture of this project... this
+    should not include in this webpage, I need to keep download in my folder." Delivered as a standalone,
+    self-contained HTML file (Mermaid.js diagrams via CDN) plus a Markdown twin — both living in <code>docs/</code>,
+    outside <code>frontend/src</code>/<code>public</code> so Vite never bundles or serves them, and never published
+    as a hosted link, per the explicit "private / local only" requirement.
+  </p>
+  <p>Contains 5 diagrams built from the actual verified routes/models/components: system architecture, a sequence
+  diagram of a typical authenticated request through the middleware chain, role-based registration/routing, the
+  MongoDB entity-relationship model, and the OTP verification flow. This document you're reading now
+  (<code>DEVELOPMENT_LOG.html</code>) follows the exact same "private, local-only" pattern and sits alongside it.</p>
+</section>
+
+<!-- 11 -->
+<section id="navigator">
+  <h2><span class="num">11</span> AI website navigation assistant persona</h2>
+  <span class="tag">backend/routes/chatRoutes.js</span>
+  <span class="tag">GiviChat.jsx</span>
+  <p class="summary">
+    Request: turn Givi into a full "AI Website Navigation Assistant" — welcome experience, explain every button,
+    context-aware recommendations, honest about what doesn't exist on the site, while keeping the existing privacy
+    hard-rule completely intact.
+  </p>
+  <h3>What changed</h3>
+  <ul>
+    <li>A new <code>NAVIGATION</code> block was added to <code>buildKnowledgeContext()</code>, describing every real
+    section of the single-page site (Hero, Services, Work, About, Pricing, Contact) and exactly what each button
+    does — including the role-aware "Start a project" behavior from §5.</li>
+    <li>An explicit "does not exist" list was added so Givi refuses to invent pages: no blog, no FAQ page, no
+    separate case-studies page, no dedicated mobile/custom-software pages, no booking calendar (the Contact form is
+    the real next step).</li>
+    <li>The pre-existing <code>HARD RULE</code> privacy block (never reveal accounts, credentials, payment records,
+    invite codes, API keys, or backend internals) was carried over <strong>verbatim, unchanged</strong> into the new
+    prompt.</li>
+    <li><code>GiviChat.jsx</code> greeting and quick-suggestion chips updated to match the new "site guide" persona.</li>
+  </ul>
+  <pre><code>const GREETING = {
+  role: "assistant",
+  content: "👋 Welcome to GivsiaTech! I'm Givi, your site guide — ask me anything, " +
+           "or I can walk you through what we offer and help you find where to start.",
+};</code></pre>
+  <div class="shots">
+    <figure>
+      <img src="screenshots/chat-widget-dark.png" alt="Givi navigator chat, dark theme" />
+      <figcaption>Givi navigator open, dark theme, with quick-suggestion chips</figcaption>
+    </figure>
+    <figure>
+      <img src="screenshots/chat-widget-light.png" alt="Givi navigator chat, light theme" />
+      <figcaption>Same panel, light theme</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 12 -->
+<section id="security">
+  <h2><span class="num">12</span> Security hardening — Phase 1</h2>
+  <span class="tag">backend/utils/security.js</span>
+  <span class="tag">backend/models/SecurityEvent.js, BlockedIP.js</span>
+  <span class="tag">admin Security tab</span>
+  <p class="summary">
+    Request: an "enterprise-grade AI-powered security system" covering 16 categories — AI threat detection, an AI
+    firewall, login protection, bot detection, spam protection, chatbot security, API protection, file scanning,
+    behavioral analytics, fraud detection, a SOC-style dashboard, alerting, zero-trust, and Kubernetes deployment.
+  </p>
+  <div class="err">
+    <span class="err-label">Scope reality check, before writing any code</span>
+    <p style="margin:0">
+      That spec describes a full SOC/WAF/fraud-detection platform — mouse/keystroke biometrics, ML-based DDoS bot
+      classification, device fingerprinting, chargeback/stolen-card detection, a Kubernetes cluster, Slack/Teams/
+      Discord webhook alerting. Several of those aren't things you hand-roll in an Express app at all — they're
+      what Cloudflare, DataDome, Stripe Radar, and a real SIEM exist for. Building fake versions and calling them
+      "AI-powered" would be security theater on a solo-maintained site with no Kubernetes cluster and no ML
+      training data. The user was asked to scope it via <code>AskUserQuestion</code> and chose: build a real,
+      honestly-described Phase 1 hardening layer using what the stack already has (Express, MongoDB, the existing
+      Gemini integration, nodemailer) instead of faking the rest.
+    </p>
+  </div>
+
+  <h3>What's real vs. what's out of scope</h3>
+  <table style="width:100%; border-collapse:collapse; font-size:0.85rem; margin:12px 0;">
+    <tr><th style="text-align:left; padding:6px 10px; color:var(--accent2); border-bottom:1px solid var(--border);">Built</th><th style="text-align:left; padding:6px 10px; color:var(--accent2); border-bottom:1px solid var(--border);">Explicitly not attempted (needs a managed vendor)</th></tr>
+    <tr>
+      <td style="padding:6px 10px; border-bottom:1px solid var(--border); vertical-align:top;">Per-IP rate limiting on every public endpoint, brute-force account lockout, an IP auto-blocklist with escalating temp→permanent bans, heuristic + Gemini-assisted spam/prompt-injection screening, magic-byte file-upload verification, an admin Security tab, email alerts on critical events, an honest CSRF write-up for why it doesn't apply to a Bearer-token API.</td>
+      <td style="padding:6px 10px; border-bottom:1px solid var(--border); vertical-align:top;">Real ML bot/DDoS classification, device/browser fingerprinting, mouse-movement/keystroke biometrics, stolen-card/chargeback fraud detection, a WAF, Kubernetes, Slack/Discord/Teams alerting (needs the user's own webhook URLs), true malware/virus scanning (needs an AV engine like ClamAV).</td>
+    </tr>
+  </table>
+
+  <h3>1. Detection log + auto-block, not a black box</h3>
+  <p>
+    Every security signal — a tripped rate limit, a failed login, a flagged message, a rejected upload — flows
+    through one function, <code>logSecurityEvent()</code>, which persists it and mirrors it to stdout (same
+    convention as <code>activityLogger.js</code>). A second function, <code>registerViolation(ip, reason)</code>,
+    counts how many violations one IP has racked up in the trailing hour and escalates:
+  </p>
+  <pre><code>// utils/security.js
+const AUTO_BLOCK_THRESHOLD = 3;             // violations in 1h -> temp block
+const AUTO_BLOCK_TEMP_DURATION_MS = 24h;     // first offense
+const PERMANENT_BLOCK_AFTER_EPISODES = 3;    // repeat offender -> permanent
+
+// past auto-block episodes are counted from SecurityEvent history (90-day
+// TTL), which outlives the block itself (24h) — so a repeat offender is
+// still recognized as one, even after their first ban already expired.</code></pre>
+
+  <h3>2. Verified end-to-end, including a real self-inflicted block</h3>
+  <p>
+    Testing this against a throwaway admin account from the same machine tripped the exact behavior it was built
+    for: a malicious contact-form submission, a blocked chatbot jailbreak attempt, and one failed login — three
+    different violation types, same IP, within the hour — combined to auto-block <code>::1</code> (localhost) for
+    24 hours mid-test. That's a genuine confirmation the cross-endpoint correlation works, not just a per-route
+    check. The block (and every other piece of test data — the throwaway admin accounts, security events, contact
+    messages, uploaded test image) was cleaned up immediately after.
+  </p>
+
+  <h3>3. Brute-force lockout, layered on top of the existing IP rate limiter</h3>
+  <pre><code>// authRoutes.js - POST /login
+if (isLocked(user)) {
+  return res.status(429).json({ message: "Too many failed attempts on this account — please try again in a few minutes" });
+}
+if (!(await user.comparePassword(password))) {
+  await recordFailedLogin(user, req.ip);   // locks the ACCOUNT for 15min after 5 failures
+  return res.status(401).json({ message: "Invalid email or password" });
+}</code></pre>
+  <p>
+    This catches credential stuffing against one account from many different IPs — something the existing
+    per-IP <code>authLimiter</code> alone couldn't, since it only caps requests from a single IP.
+  </p>
+
+  <h3>4. Content screening — heuristic first, Gemini for the ambiguous cases</h3>
+  <p>
+    A regex layer catches obvious jailbreak phrasing ("ignore all previous instructions", "reveal your system
+    prompt", "enter developer mode") and classifies it malicious with no API call. Genuinely ambiguous text (spam
+    signals like URL-flooding or scam keywords, but not a clear-cut case) gets a second opinion from the same
+    Gemini model already used for Givi and outreach drafting — this is zero-shot classification via prompt, not a
+    trained bespoke model, and is described that way everywhere it's referenced.
+  </p>
+  <pre><code>// contactRoutes.js
+const screen = await screenText(message, "contact form message");
+if (screen.verdict === "malicious") return res.status(400).json({ ... });        // rejected outright
+const flaggedSpam = screen.verdict === "suspicious" || isDisposableEmail(email); // stored, not blocked</code></pre>
+  <p>
+    "Suspicious" content is never hard-blocked on the public contact form — a heuristic false positive shouldn't
+    silently reject a real lead. It's stored with <code>flaggedSpam: true</code> instead, visible to the admin in
+    the existing Leads tab. The chatbot applies the same screen to the newest user turn before it ever reaches
+    Gemini, short-circuiting with a canned refusal on a "malicious" verdict — saving a Gemini call on a prompt
+    that was designed to fight the system instructions anyway.
+  </p>
+
+  <h3>5. Real file-upload verification (not fake malware scanning)</h3>
+  <p>
+    Multer's <code>fileFilter</code> only sees the client-supplied Content-Type header, which is trivially
+    spoofable. <code>verifyImageSignature()</code> reads the actual bytes written to disk and checks them against
+    each format's real magic number (JPEG <code>FF D8 FF</code>, PNG's 8-byte signature, GIF's <code>GIF8</code>,
+    WEBP's <code>RIFF...WEBP</code> markers) — catching the classic "rename a script to .jpg" trick. Verified with
+    a plain-text file renamed to <code>.png</code> (rejected) and a real 1×1 PNG (accepted). This is signature
+    verification, explicitly <em>not</em> virus/malware scanning — a real AV pass would need an external engine
+    like ClamAV wired in as a further layer, which is a legitimate future enhancement rather than something faked here.
+  </p>
+
+  <h3>6. Admin Security tab</h3>
+  <p>Stat cards (events in 24h/7d, critical count, currently-blocked IPs), a manual block/unblock IP form, and a
+  live security-event table — built on the same <code>tableWrap</code>/<code>StatCard</code> patterns already
+  used by every other admin tab, so it looks native rather than bolted on.</p>
+  <div class="shots single">
+    <figure>
+      <img src="screenshots/security-tab.png" alt="Admin Security tab" />
+      <figcaption>The Security tab, freshly deployed and clean — stat cards, IP block form, and the (empty) event log</figcaption>
+    </figure>
+  </div>
+
+  <h3>7. Why there's no CSRF middleware</h3>
+  <p>
+    Auth here is a JWT sent via an <code>Authorization: Bearer</code> header (<code>frontend/src/api/axios.js</code>'s
+    request interceptor), stored in <code>localStorage</code> — not a cookie the browser attaches automatically.
+    CSRF exploits ambient credentials a browser sends without the page asking; there are none here, so a CSRF
+    token would be defending against an attack this API isn't exposed to. Documented as a deliberate omission
+    rather than an oversight, the same way <code>server.js</code> already explains why CSP is off for a JSON-only API.
+  </p>
+
+  <h3>8. New config</h3>
+  <p><code>TRUST_PROXY</code> (backend/.env) — off by default. The current <code>docker-compose.yml</code> exposes
+  port 5000 directly with no reverse proxy in front, so <code>req.ip</code> already reads the real client address;
+  blindly trusting <code>X-Forwarded-For</code> with nothing in front of you lets a client spoof their own IP and
+  walk straight past every IP-based control above. Only flip it on once this sits behind a real proxy/load balancer.</p>
+</section>
+
+<!-- 13 -->
+<section id="app-dev">
+  <h2><span class="num">13</span> App Development — 4th service line</h2>
+  <span class="tag">Pricing (live DB)</span>
+  <span class="tag">Order.service / ContactMessage.serviceInterest enums</span>
+  <span class="tag">ServicesSection.jsx</span>
+  <p class="summary">
+    Request: add "App Development" (mobile apps) as a service line alongside Website / AI Automation / SaaS,
+    starting from ₹45,000, updated everywhere pricing and service selection appear — not just the Pricing section.
+  </p>
+  <p>
+    Since <code>Pricing</code> tiers are live, admin-editable MongoDB data rather than hardcoded values, a new
+    tier was added directly to the database (order 3, after the existing 3) rather than as a code change —
+    the same one-off migration pattern used for the security-feature pricing bullets in §12. Because Givi's
+    chatbot and the outreach-drafting tool both build their context by querying <code>Pricing</code> live, neither
+    needed a code change to start quoting the new tier and price correctly.
+  </p>
+  <h3>What actually needed a code change: every hardcoded enum/dropdown/copy reference</h3>
+  <p>
+    Pricing tiers are data, but the concept of "app-development" as a <em>service category</em> — as opposed to
+    the tier's name/price/features — is baked into several enums and static content strings across the codebase.
+    Every one of them had to be updated by hand for the new tier to be selectable and correctly labeled end-to-end,
+    not just displayed on the pricing cards:
+  </p>
+  <ul>
+    <li><code>backend/models/Order.js</code> — <code>service</code> enum, so a project can actually be created as an app-development order</li>
+    <li><code>backend/models/ContactMessage.js</code> — <code>serviceInterest</code> enum, for the public contact form</li>
+    <li><code>backend/routes/portfolioRoutes.js</code> — <code>SERVICE_TAG</code> map, so a published app-development case study gets the right tag on the public Work section</li>
+    <li><code>backend/routes/chatRoutes.js</code> — the static <code>SERVICES</code> list and <code>NAVIGATION</code> site-map text Givi is grounded on; the old text explicitly said "mobile app development... has no page of their own," which would now be actively wrong if left unchanged</li>
+    <li><code>backend/scripts/seedPricing.js</code> — kept in sync so a <em>fresh</em> install seeds all 4 tiers (plus the §12 security bullets), not just the original 3</li>
+    <li>Frontend: <code>ServicesSection.jsx</code> (homepage cards), <code>ContactSection.jsx</code> and <code>AdminDashboard.jsx</code>'s manual-order form (dropdown options), <code>ClientDashboard.jsx</code>'s <code>SERVICES</code> const (request-a-project dropdown + default amount), <code>Footer.jsx</code> tagline, <code>index.html</code> title, and the hero headline in <code>Home.jsx</code></li>
+  </ul>
+  <pre><code>// backend/models/Order.js
+service: {
+  type: String,
+  enum: ["website", "ai-automation", "saas", "app-development", "other"],
+  required: true,
+},</code></pre>
+  <p>
+    The homepage's orbit carousel (<code>OrbitCarousel.jsx</code>) needed no change at all — it spaces cards using
+    <code>360 / items.length</code>, so it went from 3 cards at 120° apart to 4 at 90° apart automatically. One of
+    a few places in this codebase where a UI is genuinely data-driven rather than hardcoded for a fixed count.
+  </p>
+</section>
+
+<!-- 14 -->
+<section id="invoice-refund">
+  <h2><span class="num">14</span> Invoice PDFs + real refund architecture</h2>
+  <span class="tag">backend/utils/generateInvoicePdf.js</span>
+  <span class="tag">backend/routes/paymentRoutes.js</span>
+  <span class="tag">Order.js</span>
+  <p class="summary">
+    Request: after payment, let a client download their invoice/payment details as a real PDF, and wire up genuine
+    refund processing (not just a status flip) for the existing 48-hour self-cancellation window.
+  </p>
+  <h3>Invoice PDF</h3>
+  <p>
+    <code>generateInvoicePdf()</code> streams a PDFKit document directly to the HTTP response — no temp files.
+    PDFKit's standard-14 fonts have no ₹ (U+20B9) glyph, so amounts render as plain ASCII <code>Rs. 25,000</code>
+    instead — a font limitation, not a bug, confirmed by extracting the actual rendered text with
+    <code>pdftotext</code> (PDFKit compresses its content streams, so <code>strings</code> can't read it directly;
+    <code>brew install poppler</code> gets a real extractor).
+  </p>
+  <pre><code>// GET /api/payments/orders/:id/invoice — ownership-checked,
+// only for paid/refunded/refund-pending orders
+router.get("/orders/:id/invoice", protect, asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id);
+  if (String(order.client) !== String(req.user._id) && req.user.role !== "admin") {
+    return res.status(403).json({ message: "Not authorized" });
+  }
+  res.setHeader("Content-Type", "application/pdf");
+  generateInvoicePdf(order, res);
+}));</code></pre>
+  <p>Frontend download is an authenticated blob fetch, not a plain link — a bare <code>&lt;a href&gt;</code> can't
+  attach the Authorization header a protected route needs:</p>
+  <pre><code>const res = await api.get(`/payments/orders/${order._id}/invoice`, { responseType: "blob" });
+const url = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+const a = document.createElement("a");
+a.href = url; a.download = `GivsiaTech-Invoice-${order.invoiceNumber}.pdf`;
+a.click();</code></pre>
+  <h3>Refund architecture — fail-safe, not fail-silent</h3>
+  <p>
+    <code>Order</code> gained <code>refundId</code>, <code>refundStatus</code>, <code>refundAmount</code>,
+    <code>refundedAt</code>, and a <code>"refunded"</code>/<code>"refund-pending"</code> addition to
+    <code>paymentStatus</code>. Cancelling a <em>paid</em> order now calls Razorpay's real refund API
+    (<code>razorpayClient.payments.refund()</code>) instead of just flipping a status flag.
+  </p>
+  <div class="fix-label">The design decision that mattered most here</div>
+  <p>
+    If the Razorpay refund call itself fails, the order is left <strong>completely unchanged</strong> — not marked
+    cancelled, not marked refunded — and a clear 502 is returned instead. The alternative (marking it cancelled
+    regardless, then trying to sort out the refund later) would silently promise a refund that didn't actually
+    happen. Verified both paths directly: a failed refund call leaves the order untouched, and an
+    already-unpaid order still cancels cleanly with no refund attempted.
+  </p>
+  <p>The webhook handler also now processes Razorpay's <code>refund.processed</code> event, and the cancellation
+  email is refund-aware (tells the client whether a refund was issued and how much).</p>
+</section>
+
+<!-- 15 -->
+<section id="price-floor">
+  <h2><span class="num">15</span> Client-set price floor (₹5,000 below base price)</h2>
+  <span class="tag">Pricing.js — basePrice, serviceKey</span>
+  <span class="tag">paymentRoutes.js — create-order</span>
+  <span class="tag">ClientDashboard.jsx</span>
+  <p class="summary">
+    Request: when a client requests a project and picks their own amount, they should only be able to go as low
+    as ₹5,000 under that service's listed starting price — never lower — enforced everywhere a client can set a
+    custom price.
+  </p>
+  <p><code>Pricing</code> gained <code>basePrice</code> (Number) and <code>serviceKey</code> (matches the
+  <code>Order.service</code> enum) so the floor can be looked up per service rather than hardcoded. The real
+  boundary is server-side:</p>
+  <pre><code>// backend/routes/paymentRoutes.js
+const PRICE_FLOOR_DISCOUNT = 5000;
+const tier = await Pricing.findOne({ serviceKey: service, isActive: true });
+if (tier?.basePrice && amount < tier.basePrice - PRICE_FLOOR_DISCOUNT) {
+  return res.status(400).json({ message: `Amount can't be lower than ₹${tier.basePrice - PRICE_FLOOR_DISCOUNT}` });
+}</code></pre>
+  <p>
+    The client dashboard's request-project form mirrors this with a live inline warning and disables submission
+    below the floor — UX convenience only, since the frontend check can't be trusted as the real boundary.
+    Verified all four boundary cases directly via the API: below floor rejected, exactly at floor allowed, above
+    floor allowed, and a service with no configured <code>basePrice</code> (e.g. "other") left unrestricted.
+  </p>
+</section>
+
+<!-- 16 -->
+<section id="live-validation">
+  <h2><span class="num">16</span> Live email/phone validation (red/green indicators)</h2>
+  <span class="tag">frontend/src/components/ValidatedInput.jsx</span>
+  <span class="tag">frontend/src/utils/validators.js</span>
+  <p class="summary">
+    Request: on every email/phone field across registration and similar forms, show a red warning icon while the
+    value doesn't match a valid format, and a green check once it does — for every role (client, admin, service).
+  </p>
+  <p>
+    <code>ValidatedInput.jsx</code> is a drop-in <code>&lt;input&gt;</code> replacement (same convention as the
+    existing <code>PasswordInput.jsx</code>) that renders a small pop-in icon at the right edge of the field, only
+    once it has content. <code>isValidPhone()</code> in <code>utils/validators.js</code> deliberately mirrors the
+    backend's own <code>normalizePhone</code> rule in <code>authRoutes.js</code>, so the frontend hint never
+    disagrees with what the backend will actually accept.
+  </p>
+  <p>Wired into every email/phone input site-wide: Register (email + phone), Login (main + forgot-password email),
+  Profile (founder's public email), the public Contact form, and Admin's "Add user" email field.</p>
+</section>
+
+<!-- 17 -->
+<section id="gemini-thinking-bug">
+  <h2><span class="num">17</span> Gemini regression — <code>thinkingConfig</code> silently broke three features at once</h2>
+  <span class="tag">backend/utils/gemini.js callers</span>
+  <span class="tag">chatRoutes.js</span>
+  <span class="tag">outreachRoutes.js</span>
+  <span class="tag">bizLeadRoutes.js</span>
+  <p class="summary">
+    Found while building the AI Lead Finder's email/proposal generation (§18): the very first test call returned
+    a 502. Turned out to be a live, pre-existing regression that also silently broke the already-shipped Givi
+    chatbot and the Service Dashboard's outreach drafting — not something introduced by the new feature.
+  </p>
+  <div class="err">
+    <span class="err-label">Root cause</span>
+    <p>Every Gemini call in this codebase set <code>generationConfig.thinkingConfig = { thinkingBudget: 0 }</code>
+    to stop "thinking" models from burning <code>maxOutputTokens</code> on invisible chain-of-thought (see §01's
+    original comment). At some point, Google's <code>gemini-flash-lite-latest</code> alias moved forward to a
+    newer model (<code>gemini-3.5-flash-lite</code>, confirmed via the raw API's <code>modelVersion</code> field)
+    that rejects that parameter outright with <code>400 INVALID_ARGUMENT</code> — and does not exhibit the
+    original problem without it.</p>
+  </div>
+  <div class="fix-label">Fix — verified directly against the raw API before touching code</div>
+  <pre><code>// WITH thinkingConfig -> 400 INVALID_ARGUMENT
+// WITHOUT it            -> clean, concise reply, no wasted tokens
+generationConfig: { maxOutputTokens: 500 } // thinkingConfig removed</code></pre>
+  <p>Removed from all three call sites — <code>chatRoutes.js</code> (Givi), <code>outreachRoutes.js</code> (cold
+  outreach drafting), and the two new <code>bizLeadRoutes.js</code> generation endpoints — since they all share
+  the same underlying model/behavior. Re-tested all three afterward and got real, on-topic responses from each.</p>
+</section>
+
+<!-- 18 -->
+<section id="bizlead">
+  <h2><span class="num">18</span> AI Business Lead Finder + New Business Monitor</h2>
+  <span class="tag">backend/models/BizLead.js, EmailTemplate.js</span>
+  <span class="tag">backend/routes/bizLeadRoutes.js</span>
+  <span class="tag">backend/utils/googlePlaces.js</span>
+  <span class="tag">frontend/src/pages/dashboards/bizleads/</span>
+  <p class="summary">
+    Request: a premium admin-only module to discover businesses with no website across dozens of categories/cities/
+    countries, run them through a full lead-management CRM with AI-generated outreach, plus a separate module for
+    newly-registered businesses — full enterprise-CRM spec (per-city dashboards, heatmaps, RBAC, real-time, etc).
+  </p>
+  <h3>Scoping conversation before writing any code</h3>
+  <p>
+    The literal spec asked for things that are either legally risky or unrealistic to build in one pass, so the
+    approach was agreed with the user up front rather than assumed:
+  </p>
+  <ul>
+    <li><strong>No bulk-scraping Google Maps/Justdial</strong> — both explicitly disallow automated scraping in
+      their ToS regardless of intent. Discovery instead uses Google's official <strong>Places API</strong>
+      (Text Search + Place Details) — paid, ToS-compliant, and it does <em>not</em> return owner name or email
+      (Google doesn't expose those publicly); those stay empty unless added via CSV import or manual entry.</li>
+    <li><strong>No free bulk API for India's MCA company registry</strong>, so the New Business Monitor is
+      CSV-import/manual-entry only for this pass — same CRM engine as the Lead Finder, filtered by a
+      <code>moduleType</code> field, no live-scraping button shown for it at all.</li>
+    <li><strong>MVP over full breadth</strong> — one unified, filterable lead table (city/country as fields, not
+      30+ hardcoded per-city tabs) rather than scaffolding every named city/country as its own dashboard before
+      any real data exists for most of them.</li>
+    <li><strong>Reused the existing Gemini integration</strong> for AI email/proposal generation rather than
+      adding a second LLM provider — no new API key needed, since <code>GEMINI_API_KEY</code> was already
+      configured for Givi/outreach.</li>
+  </ul>
+  <h3>What was built</h3>
+  <ul>
+    <li><code>BizLead</code> — one schema shared by both modules (<code>moduleType: "lead-finder" | "new-business"</code>),
+      with notes/activity-timeline/assignment/tags/next-follow-up embedded, plus registry-only fields
+      (registrationDate, registrationNumber, directors) left empty outside the New Business Monitor.</li>
+    <li><code>utils/googlePlaces.js</code> — Text Search + Place Details, classifies a Facebook/Instagram-only
+      page as "no real website" (most small-business targets only have a social page, not a domain), computes an
+      opportunity score from only the signals actually observable (website presence, rating, review count) —
+      deliberately not fabricating "weak SEO"/"no branding" scores with no real data behind them.</li>
+    <li>CSV import/export with flexible header mapping (<code>csv-parse</code>) and duplicate detection by
+      business name + city; PDF export via the same PDFKit already used for invoices (§14).</li>
+    <li>AI "Generate email" / "Generate proposal" grounded in real pricing/portfolio data via the same
+      <code>buildServiceContext()</code> helper outreachRoutes.js already used — extracted to
+      <code>utils/serviceContext.js</code> so both stay in sync instead of drifting.</li>
+    <li><code>Outreach</code> gained an optional <code>lead</code> ref instead of a second communication log —
+      an email sent from a lead's detail drawer shows up in both the lead's own history and the existing Service
+      Dashboard outreach history from one write.</li>
+    <li>Two visually distinct "AI"-badged buttons in the Admin Dashboard nav (rather than blending into the
+      existing plain tab row), per the "clearly highlighted" ask.</li>
+  </ul>
+  <div class="shots">
+    <figure>
+      <img src="screenshots/bizlead-tab.png" alt="AI Business Lead Finder tab — filters, analytics, lead table" />
+      <figcaption>AI Lead Finder — analytics cards, category chart, filterable lead table</figcaption>
+    </figure>
+    <figure>
+      <img src="screenshots/bizlead-detail.png" alt="Business lead detail drawer" />
+      <figcaption>Lead detail drawer — info, workflow status, AI outreach, communication history</figcaption>
+    </figure>
+  </div>
+  <h3>Verification</h3>
+  <p>
+    End-to-end tested directly against the API: manual create, filtered list, notes, status-change activity
+    logging, analytics aggregation, AI email/proposal generation (after fixing §17), send-email fail-safe path,
+    discovery's clean 503 when <code>GOOGLE_PLACES_API_KEY</code> is unset, and a CSV import round-trip that
+    correctly created one new lead and skipped one duplicate. Confirmed in-browser via Playwright with zero
+    console/page errors on both new tabs. All test data (leads, demo screenshot record) deleted afterward.
+  </p>
+  <p><strong>Still needed from the user:</strong> a <code>GOOGLE_PLACES_API_KEY</code> in <code>backend/.env</code>
+  to turn on live discovery — everything else (manual entry, CSV import/export, CRM workflow, AI generation)
+  works without it.</p>
+</section>
+
+</main>
+
+<footer>
+  Generated from the working conversation and repository state on this machine. Screenshots captured directly from
+  the running dev servers (<code>localhost:5173</code> / <code>:5000</code>) via a throwaway Playwright script; the
+  script and any test data were deleted after use, following the same verification pattern used throughout
+  development. Not linked from, or bundled into, the deployed site.
+</footer>
+
+</body>
+</html>

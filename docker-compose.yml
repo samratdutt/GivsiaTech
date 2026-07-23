@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    ports:
+      # Bound to localhost only — the public internet never talks to Node
+      # directly. Nginx (on the host, outside this compose file) terminates
+      # TLS on 80/443 and reverse-proxies to 127.0.0.1:5000. Without this,
+      # the API would also be reachable unencrypted on port 5000 directly.
+      - "127.0.0.1:5000:5000"
+    restart: unless-stopped
+    volumes:
+      # Uploaded images (backend/uploads, see middleware/upload.js) live in
+      # the container's writable layer otherwise — a named volume survives
+      # `docker compose up -d --build` on every deploy; without it, each
+      # redeploy would silently wipe every previously uploaded image.
+      - uploads:/app/uploads
+    # Every request is logged to stdout by morgan (see backend/server.js) —
+    # `docker compose logs -f backend` is a live per-request activity feed.
+    # Capped here so the log file on disk can't grow unbounded: 10MB per
+    # file, 5 files kept (~50MB max), oldest rotated out automatically.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  uploads:
