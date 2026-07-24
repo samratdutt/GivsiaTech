@@ -1365,10 +1365,16 @@ function ServicesTab({ items, refreshAll }) {
   };
 
   const deleteService = async (s) => {
-    if (!(await confirm(`Delete service "${s.title}"? This can't be undone.`))) return;
+    const linkWarning = s.linkedTierCount
+      ? ` ${s.linkedTierCount} pricing tier${s.linkedTierCount === 1 ? "" : "s"} currently link${s.linkedTierCount === 1 ? "s" : ""} to it — they'll be unlinked, not deleted.`
+      : "";
+    if (!(await confirm(`Delete service "${s.title}"? This can't be undone.${linkWarning}`))) return;
     try {
-      await api.delete(`/services/${s._id}`);
+      const { data } = await api.delete(`/services/${s._id}`);
       refreshAll();
+      if (data.unlinkedTierCount) {
+        showToast(`Service deleted — unlinked from ${data.unlinkedTierCount} pricing tier${data.unlinkedTierCount === 1 ? "" : "s"}.`, "info");
+      }
     } catch (err) {
       showToast(err.response?.data?.message || "Could not delete service", "error");
     }
@@ -1400,6 +1406,7 @@ function ServicesTab({ items, refreshAll }) {
               <th style={th}>Copy</th>
               <th style={th}>Order</th>
               <th style={th}>Status</th>
+              <th style={th}>Linked pricing tiers</th>
               <th style={th}></th>
             </tr>
           </thead>
@@ -1413,6 +1420,7 @@ function ServicesTab({ items, refreshAll }) {
                     <td style={td}><input value={editForm.copy} onChange={(e) => setEditForm({ ...editForm, copy: e.target.value })} /></td>
                     <td style={td}><input type="number" value={editForm.order} onChange={(e) => setEditForm({ ...editForm, order: e.target.value })} style={{ width: 60 }} /></td>
                     <td style={td}>{s.isActive ? "Active" : "Inactive"}</td>
+                    <td style={td}>{s.linkedTierCount || 0}</td>
                     <td style={td}>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button className="btn btn-primary" style={{ padding: "6px 12px", fontSize: "0.75rem" }} onClick={() => saveEdit(s._id)}>Save</button>
@@ -1427,6 +1435,7 @@ function ServicesTab({ items, refreshAll }) {
                     <td style={{ ...td, maxWidth: 320 }}>{s.copy}</td>
                     <td style={td}>{s.order}</td>
                     <td style={td}>{s.isActive ? "Active" : "Inactive"}</td>
+                    <td style={td}>{s.linkedTierCount || 0}</td>
                     <td style={td}>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button className="btn btn-ghost" style={{ padding: "6px 12px", fontSize: "0.75rem" }} onClick={() => startEdit(s)}>Edit</button>
@@ -1447,7 +1456,7 @@ function ServicesTab({ items, refreshAll }) {
               </tr>
             ))}
             {items.length === 0 && (
-              <tr><td style={td} colSpan={6}>No services yet — add one above.</td></tr>
+              <tr><td style={td} colSpan={7}>No services yet — add one above.</td></tr>
             )}
           </tbody>
         </table>

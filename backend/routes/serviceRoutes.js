@@ -1,5 +1,6 @@
 import express from "express";
 import Service from "../models/Service.js";
+import Pricing from "../models/Pricing.js";
 import { protect } from "../middleware/auth.js";
 import { authorize } from "../middleware/role.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
@@ -33,10 +34,18 @@ router.get("/", asyncHandler(async (req, res) => {
 }));
 
 // @route   GET /api/services/all
-// @desc    Admin: list every service, including inactive ones, for management
+// @desc    Admin: list every service, including inactive ones, for management.
+//          Each service also carries linkedTierCount — how many Pricing
+//          tiers currently link to it (see models/Pricing.js's serviceKey)
+//          — so the admin UI can warn before a delete orphans those links.
 router.get("/all", protect, authorize("admin"), asyncHandler(async (req, res) => {
   const services = await Service.find().sort({ order: 1, createdAt: 1 });
-  res.json({ services });
+  const counts = await Pricing.aggregate([
+    { $match: { serviceKey: { $ne: null } } },
+    { $group: { _id: "$serviceKey", count: { $sum: 1 } } },
+  ]);
+  const countByKey = Object.fromEntries(counts.map((c) => [c._id, c.count]));
+  res.json({ services: services.map((s) => ({ ...s.toObject(), linkedTierCount: countByKey[s.key] || 0 })) });
 }));
 
 // @route   POST /api/services
@@ -72,12 +81,18 @@ router.patch("/:id", protect, authorize("admin"), asyncHandler(async (req, res) 
 }));
 
 // @route   DELETE /api/services/:id
-// @desc    Admin: remove a service
+// @desc    Admin: remove a service. Any Pricing tier still linked to it
+//          (serviceKey === this service's key) gets unlinked in the same
+//          request — otherwise the tier would keep pointing at a key that
+//          no longer resolves to any real service, showing up as a raw,
+//          unrecognizable string in the admin Pricing tab instead of
+//          cleanly falling back to "no linked service".
 router.delete("/:id", protect, authorize("admin"), asyncHandler(async (req, res) => {
   const service = await Service.findById(req.params.id);
   if (!service) return res.status(404).json({ message: "Service not found" });
   await service.deleteOne();
-  res.json({ message: "Service deleted" });
+  const { modifiedCount } = await Pricing.updateMany({ serviceKey: service.key }, { $unset: { serviceKey: 1 } });
+  res.json({ message: "Service deleted", unlinkedTierCount: modifiedCount });
 }));
 
 export default router;
