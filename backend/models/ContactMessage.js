@@ -5,11 +5,9 @@ const contactMessageSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, trim: true, lowercase: true },
     company: { type: String, trim: true },
-    serviceInterest: {
-      type: String,
-      enum: ["website", "ai-automation", "saas", "app-development", "other"],
-      default: "other",
-    },
+    // Matches a Service.key (see models/Service.js), or "other" — no longer
+    // a fixed enum, since services are admin-managed and open-ended.
+    serviceInterest: { type: String, trim: true, default: "other" },
     message: { type: String, required: true },
     status: {
       type: String,

@@ -1,11 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import api from "../api/axios.js";
 import ValidatedInput from "./ValidatedInput.jsx";
 import { isValidEmail } from "../utils/validators.js";
 
 export default function ContactSection() {
-  const [form, setForm] = useState({ name: "", email: "", company: "", serviceInterest: "website", message: "" });
+  const [form, setForm] = useState({ name: "", email: "", company: "", serviceInterest: "other", message: "" });
   const [status, setStatus] = useState("idle"); // idle | sending | sent | error
+  const [services, setServices] = useState([]);
+
+  useEffect(() => {
+    api.get("/services").then((res) => setServices(res.data.services)).catch(() => {});
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -13,7 +18,7 @@ export default function ContactSection() {
     try {
       await api.post("/contact", form);
       setStatus("sent");
-      setForm({ name: "", email: "", company: "", serviceInterest: "website", message: "" });
+      setForm({ name: "", email: "", company: "", serviceInterest: "other", message: "" });
     } catch (err) {
       setStatus("error");
     }
@@ -58,10 +63,9 @@ export default function ContactSection() {
             value={form.serviceInterest}
             onChange={(e) => setForm({ ...form, serviceInterest: e.target.value })}
           >
-            <option value="website">Website</option>
-            <option value="ai-automation">AI automation</option>
-            <option value="saas">SaaS platform</option>
-            <option value="app-development">App development</option>
+            {services.map((s) => (
+              <option key={s._id} value={s.key}>{s.title}</option>
+            ))}
             <option value="other">Something else</option>
           </select>
           <textarea

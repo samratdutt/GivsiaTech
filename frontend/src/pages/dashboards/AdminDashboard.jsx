@@ -194,6 +194,7 @@ export default function AdminDashboard() {
         <OrdersTab
           orders={orders}
           clients={clients}
+          services={servicesItems}
           expandedOrder={expandedOrder}
           setExpandedOrder={setExpandedOrder}
           refreshAll={refreshAll}
@@ -204,7 +205,7 @@ export default function AdminDashboard() {
 
       {tab === "users" && <UsersTab users={users} refreshAll={refreshAll} currentUserId={user?.id} />}
 
-      {tab === "messages" && <LeadsTab leads={leads} refreshAll={refreshAll} />}
+      {tab === "messages" && <LeadsTab leads={leads} services={servicesItems} refreshAll={refreshAll} />}
 
       {tab === "pricing" && <PricingTab tiers={pricingTiers} services={servicesItems} refreshAll={refreshAll} />}
 
@@ -300,7 +301,7 @@ function Overview({ summary }) {
 
 /* ----------------------------- Orders ------------------------------ */
 
-function OrdersTab({ orders, clients, expandedOrder, setExpandedOrder, refreshAll }) {
+function OrdersTab({ orders, clients, services, expandedOrder, setExpandedOrder, refreshAll }) {
   const { showToast } = useToast();
   const confirm = useConfirm();
   const [progressNote, setProgressNote] = useState("");
@@ -315,7 +316,7 @@ function OrdersTab({ orders, clients, expandedOrder, setExpandedOrder, refreshAl
   const [showManualForm, setShowManualForm] = useState(false);
   const [manualForm, setManualForm] = useState({
     clientId: "", manualClientName: "", manualClientPhone: "", manualClientEmail: "",
-    service: "website", title: "", description: "", techStack: "", amount: "",
+    service: "other", title: "", description: "", techStack: "", amount: "",
     status: "completed", progressPercent: 100, paymentStatus: "paid", image: "",
   });
   const [manualError, setManualError] = useState("");
@@ -427,7 +428,7 @@ function OrdersTab({ orders, clients, expandedOrder, setExpandedOrder, refreshAl
       });
       setManualForm({
         clientId: "", manualClientName: "", manualClientPhone: "", manualClientEmail: "",
-        service: "website", title: "", description: "", techStack: "", amount: "",
+        service: "other", title: "", description: "", techStack: "", amount: "",
         status: "completed", progressPercent: 100, paymentStatus: "paid", image: "",
       });
       setShowManualForm(false);
@@ -473,10 +474,9 @@ function OrdersTab({ orders, clients, expandedOrder, setExpandedOrder, refreshAl
 
           <div className="responsive-grid-form" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12 }}>
             <select value={manualForm.service} onChange={(e) => setManualForm({ ...manualForm, service: e.target.value })}>
-              <option value="website">Website</option>
-              <option value="ai-automation">AI automation</option>
-              <option value="saas">SaaS platform</option>
-              <option value="app-development">App development</option>
+              {services.map((s) => (
+                <option key={s._id} value={s.key}>{s.title}</option>
+              ))}
               <option value="other">Other</option>
             </select>
             <input placeholder="Project title" value={manualForm.title} onChange={(e) => setManualForm({ ...manualForm, title: e.target.value })} required />
@@ -1028,7 +1028,7 @@ function UsersTab({ users, refreshAll, currentUserId }) {
 
 /* ------------------------------ Leads ------------------------------ */
 
-function LeadsTab({ leads, refreshAll }) {
+function LeadsTab({ leads, services, refreshAll }) {
   const { showToast } = useToast();
   const confirm = useConfirm();
   const setLeadStatus = async (leadId, status) => {
@@ -1068,7 +1068,7 @@ function LeadsTab({ leads, refreshAll }) {
                 {l.client ? (
                   <span style={offlineBadge}>customer{l.relatedOrder ? `: ${l.relatedOrder.title}` : ""}</span>
                 ) : (
-                  l.serviceInterest
+                  services.find((s) => s.key === l.serviceInterest)?.title || (l.serviceInterest === "other" ? "Other" : l.serviceInterest)
                 )}
               </td>
               <td style={{ ...td, maxWidth: 280 }}>{l.message}</td>

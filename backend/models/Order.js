@@ -28,11 +28,11 @@ const orderSchema = new mongoose.Schema(
       email: { type: String, trim: true },
     },
     source: { type: String, enum: ["online", "offline"], default: "online" },
-    service: {
-      type: String,
-      enum: ["website", "ai-automation", "saas", "app-development", "other"],
-      required: true,
-    },
+    // Matches a Service.key (see models/Service.js), or "other" for a
+    // request not tied to any listed service. No longer a fixed enum —
+    // services are admin-managed and open-ended (see serviceRoutes.js), so
+    // any current or since-deleted service key must still be storable here.
+    service: { type: String, required: true, trim: true },
     title: { type: String, required: true },
     description: { type: String },
     techStack: { type: [String], default: [] },

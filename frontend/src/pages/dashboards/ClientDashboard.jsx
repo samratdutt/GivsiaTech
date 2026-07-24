@@ -7,13 +7,6 @@ import TermsModal from "../../components/TermsModal.jsx";
 import { useConfirm } from "../../context/ConfirmContext.jsx";
 import { downloadInvoice, INVOICE_AVAILABLE } from "../../utils/invoice.js";
 
-const SERVICES = [
-  { id: "website", label: "Website Build", defaultAmount: 25000 },
-  { id: "ai-automation", label: "AI Automation", defaultAmount: 40000 },
-  { id: "saas", label: "SaaS Platform", defaultAmount: 80000 },
-  { id: "app-development", label: "App Development", defaultAmount: 45000 },
-];
-
 const CANCEL_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 
 function loadRazorpayScript() {
@@ -57,7 +50,8 @@ export default function ClientDashboard() {
   const { showToast } = useToast();
   const confirm = useConfirm();
   const [orders, setOrders] = useState([]);
-  const [form, setForm] = useState({ service: "website", title: "", amount: 25000 });
+  const [form, setForm] = useState({ service: "", title: "", amount: 0 });
+  const [services, setServices] = useState([]);
   const [pricingTiers, setPricingTiers] = useState([]);
   const [paying, setPaying] = useState(false);
   const [expanded, setExpanded] = useState(null);
@@ -99,12 +93,28 @@ export default function ClientDashboard() {
 
   useEffect(() => { fetchOrders(); fetchReview(); }, []);
 
-  // Live pricing (admin-editable) rather than SERVICES' hardcoded fallback
-  // amounts — keeps the request-project floor accurate if an admin changes
-  // a tier's base price later, without needing a frontend redeploy.
+  // Live pricing (admin-editable) — keeps the request-project floor
+  // accurate if an admin changes a tier's base price later, without needing
+  // a frontend redeploy.
   useEffect(() => {
     api.get("/pricing").then((res) => setPricingTiers(res.data.tiers)).catch(() => {});
   }, []);
+
+  // Services (admin-managed, same list as the homepage's Services section
+  // and the admin Pricing tab's "linked service" dropdown) — whatever an
+  // admin adds/renames/removes here is exactly what a client can pick from.
+  useEffect(() => {
+    api.get("/services").then((res) => setServices(res.data.services)).catch(() => {});
+  }, []);
+
+  // Default the form to the first available service once services load, so
+  // the amount floor below is meaningful from the start instead of "" -> 0.
+  useEffect(() => {
+    if (!form.service && services.length) {
+      const tier = pricingTiers.find((t) => t.serviceKey === services[0].key);
+      setForm((f) => ({ ...f, service: services[0].key, amount: (tier?.basePrice || 5000) }));
+    }
+  }, [services, pricingTiers]);
 
   // The server is the real boundary (paymentRoutes.js create-order rejects
   // anything below this independently) — this floor is just for instant
@@ -112,9 +122,7 @@ export default function ClientDashboard() {
   const PRICE_FLOOR_DISCOUNT = 5000;
   const floorFor = (serviceId) => {
     const tier = pricingTiers.find((t) => t.serviceKey === serviceId);
-    const fallback = SERVICES.find((s) => s.id === serviceId)?.defaultAmount;
-    const base = tier?.basePrice ?? fallback;
-    return base ? Math.max(base - PRICE_FLOOR_DISCOUNT, 1) : 1;
+    return tier?.basePrice ? Math.max(tier.basePrice - PRICE_FLOOR_DISCOUNT, 1) : 1;
   };
   const amountFloor = floorFor(form.service);
   const amountTooLow = form.amount < amountFloor;
@@ -246,12 +254,13 @@ export default function ClientDashboard() {
         <summary style={requestSummary}>+ Request a new project</summary>
         <form onSubmit={handleRequestSubmit} className="responsive-grid-form" style={formStyle}>
           <select value={form.service} onChange={(e) => {
-            const svc = SERVICES.find((s) => s.id === e.target.value);
-            setForm({ ...form, service: svc.id, amount: floorFor(svc.id) + PRICE_FLOOR_DISCOUNT });
+            const key = e.target.value;
+            setForm({ ...form, service: key, amount: floorFor(key) + PRICE_FLOOR_DISCOUNT });
           }}>
-            {SERVICES.map((s) => (
-              <option key={s.id} value={s.id}>{s.label}</option>
+            {services.map((s) => (
+              <option key={s._id} value={s.key}>{s.title}</option>
             ))}
+            <option value="other">Other</option>
           </select>
           <input
             placeholder="Project title"
@@ -309,7 +318,7 @@ export default function ClientDashboard() {
               <div style={headerStyle}>
                 <div>
                   <p style={{ fontFamily: "var(--font-display)", fontSize: "1.05rem", color: hasImage ? "#f4f2ff" : undefined }}>{o.title}</p>
-                  <p style={{ color: hasImage ? "rgba(244,242,255,0.75)" : "var(--text-dim)", fontSize: "0.85rem" }}>{o.service} &middot; {o.invoiceNumber}</p>
+                  <p style={{ color: hasImage ? "rgba(244,242,255,0.75)" : "var(--text-dim)", fontSize: "0.85rem" }}>{services.find((s) => s.key === o.service)?.title || (o.service === "other" ? "Other" : o.service)} &middot; {o.invoiceNumber}</p>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <p style={{ color: hasImage ? "#f4f2ff" : undefined }}>₹{(o.amount / 100).toLocaleString("en-IN")}</p>
