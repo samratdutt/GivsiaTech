@@ -6,6 +6,25 @@ import { asyncHandler } from "../middleware/asyncHandler.js";
 
 const router = express.Router();
 
+// Turns a title into a stable, URL/id-safe slug — e.g. "Production Websites
+// (3D Visuals)" -> "production-websites-3d-visuals". Collisions (two
+// services with titles that slugify the same) get a numeric suffix.
+async function generateKey(title) {
+  const base = title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "service";
+
+  let key = base;
+  let n = 2;
+  while (await Service.exists({ key })) {
+    key = `${base}-${n}`;
+    n += 1;
+  }
+  return key;
+}
+
 // @route   GET /api/services
 // @desc    Public: list active services, in display order
 router.get("/", asyncHandler(async (req, res) => {
@@ -28,7 +47,8 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
     if (!tag || !title || !copy) {
       return res.status(400).json({ message: "Tag, title and copy are required" });
     }
-    const service = await Service.create({ tag, title, copy, order: order ?? 0 });
+    const key = await generateKey(title);
+    const service = await Service.create({ tag, title, copy, key, order: order ?? 0 });
     res.status(201).json({ service });
   } catch (err) {
     res.status(500).json({ message: "Could not create service", error: err.message });

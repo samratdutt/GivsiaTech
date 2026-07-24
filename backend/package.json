@@ -10,6 +10,7 @@
     "seed:admin": "node scripts/seedAdmin.js",
     "seed:pricing": "node scripts/seedPricing.js",
     "seed:services": "node scripts/seedServices.js",
+    "migrate:service-keys": "node scripts/backfillServiceKeys.js",
     "seed:portfolio": "node scripts/seedPortfolio.js",
     "seed:company": "node scripts/seedCompanyInfo.js",
     "seed:founders": "node scripts/seedFounders.js"

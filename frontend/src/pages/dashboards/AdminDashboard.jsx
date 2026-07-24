@@ -206,7 +206,7 @@ export default function AdminDashboard() {
 
       {tab === "messages" && <LeadsTab leads={leads} refreshAll={refreshAll} />}
 
-      {tab === "pricing" && <PricingTab tiers={pricingTiers} refreshAll={refreshAll} />}
+      {tab === "pricing" && <PricingTab tiers={pricingTiers} services={servicesItems} refreshAll={refreshAll} />}
 
       {tab === "services" && <ServicesTab items={servicesItems} refreshAll={refreshAll} />}
 
@@ -1105,7 +1105,7 @@ function LeadsTab({ leads, refreshAll }) {
 
 /* ------------------------------ Pricing ------------------------------ */
 
-function PricingTab({ tiers, refreshAll }) {
+function PricingTab({ tiers, services, refreshAll }) {
   const { showToast } = useToast();
   const confirm = useConfirm();
   const [form, setForm] = useState({ name: "", price: "", desc: "", features: "", featured: false, order: 0, basePrice: "", serviceKey: "" });
@@ -1204,10 +1204,9 @@ function PricingTab({ tiers, refreshAll }) {
         />
         <select value={form.serviceKey} onChange={(e) => setForm({ ...form, serviceKey: e.target.value })} style={{ gridColumn: "span 2" }}>
           <option value="">No linked service (no price floor)</option>
-          <option value="website">Website</option>
-          <option value="ai-automation">AI Automation</option>
-          <option value="saas">SaaS Platform</option>
-          <option value="app-development">App Development</option>
+          {services.map((s) => (
+            <option key={s._id} value={s.key}>{s.title}</option>
+          ))}
         </select>
       </form>
       <p style={{ color: "var(--text-dim)", fontSize: "0.78rem", margin: "-8px 0 16px" }}>
@@ -1254,10 +1253,9 @@ function PricingTab({ tiers, refreshAll }) {
                       />
                       <select value={editForm.serviceKey} onChange={(e) => setEditForm({ ...editForm, serviceKey: e.target.value })} style={{ fontSize: "0.75rem" }}>
                         <option value="">No linked service</option>
-                        <option value="website">Website</option>
-                        <option value="ai-automation">AI Automation</option>
-                        <option value="saas">SaaS Platform</option>
-                        <option value="app-development">App Development</option>
+                        {services.map((s) => (
+                          <option key={s._id} value={s.key}>{s.title}</option>
+                        ))}
                       </select>
                     </td>
                     <td style={td}>{t.isActive ? "Active" : "Inactive"}</td>
@@ -1280,7 +1278,7 @@ function PricingTab({ tiers, refreshAll }) {
                       {t.basePrice ? (
                         <>
                           ₹{t.basePrice.toLocaleString("en-IN")}
-                          {t.serviceKey && <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>floor: ₹{(t.basePrice - 5000).toLocaleString("en-IN")} ({t.serviceKey})</div>}
+                          {t.serviceKey && <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>floor: ₹{(t.basePrice - 5000).toLocaleString("en-IN")} ({services.find((s) => s.key === t.serviceKey)?.title || t.serviceKey})</div>}
                         </>
                       ) : "—"}
                     </td>
