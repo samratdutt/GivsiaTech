@@ -1,35 +1,18 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import OrbitCarousel from "./OrbitCarousel.jsx";
+import api from "../api/axios.js";
 
 gsap.registerPlugin(ScrollTrigger);
 
-const services = [
-  {
-    tag: "Build",
-    title: "Production Websites",
-    copy: "Full-stack web apps and marketing sites — React/Vite frontends, Node/Express or Django backends, shipped fast and built to scale.",
-  },
-  {
-    tag: "Automate",
-    title: "AI Automation",
-    copy: "Custom AI agents, chatbots, and workflow automation wired into your existing tools — cutting manual work out of your operations.",
-  },
-  {
-    tag: "Scale",
-    title: "SaaS Platforms",
-    copy: "Role-based dashboards, subscription billing, and multi-tenant architecture — the full backend a growing product needs.",
-  },
-  {
-    tag: "Mobile",
-    title: "App Development",
-    copy: "Native and cross-platform mobile apps for iOS and Android, wired into the same backend and APIs as your web product.",
-  },
-];
-
 export default function ServicesSection() {
   const headingRef = useRef();
+  const [services, setServices] = useState([]);
+
+  useEffect(() => {
+    api.get("/services").then((res) => setServices(res.data.services)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     gsap.fromTo(

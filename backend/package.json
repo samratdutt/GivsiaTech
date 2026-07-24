@@ -9,6 +9,7 @@
     "start": "node server.js",
     "seed:admin": "node scripts/seedAdmin.js",
     "seed:pricing": "node scripts/seedPricing.js",
+    "seed:services": "node scripts/seedServices.js",
     "seed:portfolio": "node scripts/seedPortfolio.js",
     "seed:company": "node scripts/seedCompanyInfo.js",
     "seed:founders": "node scripts/seedFounders.js"

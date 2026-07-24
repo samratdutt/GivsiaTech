@@ -1,5 +1,6 @@
 import express from "express";
 import Pricing from "../models/Pricing.js";
+import Service from "../models/Service.js";
 import Portfolio from "../models/Portfolio.js";
 import CompanyInfo from "../models/CompanyInfo.js";
 import Founder from "../models/Founder.js";
@@ -9,20 +10,6 @@ import { chatLimiter } from "../middleware/rateLimit.js";
 import { screenText, logSecurityEvent } from "../utils/security.js";
 
 const router = express.Router();
-
-// Services barely change (they're the 4 fixed offering categories, closer
-// to a nav item than editable content), so they stay as plain data here —
-// update alongside frontend/src/components/ServicesSection.jsx if the copy
-// changes. Pricing, portfolio, and company info, by contrast, are all
-// admin-editable and fetched live from Mongo on every chat request below,
-// so Givi is always working from exactly what's on the live site — no
-// personal/account data (users, orders, contact messages) is ever included.
-const SERVICES = [
-  { title: "Production Websites", copy: "Full-stack web apps and marketing sites — React/Vite frontends, Node/Express or Django backends, shipped fast and built to scale." },
-  { title: "AI Automation", copy: "Custom AI agents, chatbots, and workflow automation wired into your existing tools — cutting manual work out of your operations." },
-  { title: "SaaS Platforms", copy: "Role-based dashboards, subscription billing, and multi-tenant architecture — the full backend a growing product needs." },
-  { title: "App Development", copy: "Native and cross-platform mobile apps (iOS & Android) wired into the same backend and APIs as your web product." },
-];
 
 // The real, current site map — deliberately NOT a generic template. Givi is
 // a site-navigation assistant, so it needs to know exactly what exists (no
@@ -51,8 +38,8 @@ DASHBOARDS (only worth explaining if the visitor is logged in or asks about thei
 DOES NOT EXIST — say so honestly if asked, don't invent a page for these: a blog, an FAQ page, a separate "case studies" page (Work covers that), or a booking-calendar feature (the Contact form is the real next step). App/mobile development now DOES have its own real service line (see Services above) — don't say it doesn't exist.`;
 
 // Retrieval step: pulls the current, real state of every public section of
-// the site (about, founders, pricing, portfolio, reviews — all from Mongo,
-// plus the services list above) into a single context block. This is what
+// the site (about, founders, services, pricing, portfolio, reviews — all
+// from Mongo) into a single context block. This is what
 // actually grounds Givi's answers — everything below gets stuffed into the
 // system prompt so the model answers from real data instead of guessing.
 // Only fields the site itself already shows publicly go in here — nothing
@@ -60,8 +47,9 @@ DOES NOT EXIST — say so honestly if asked, don't invent a page for these: a bl
 // into this text in the first place, so there's nothing for the model to
 // leak even if asked.
 async function buildKnowledgeContext() {
-  const [tiers, portfolioItems, company, founders, reviews] = await Promise.all([
+  const [tiers, services, portfolioItems, company, founders, reviews] = await Promise.all([
     Pricing.find({ isActive: true }).sort({ order: 1, createdAt: 1 }),
+    Service.find({ isActive: true }).sort({ order: 1, createdAt: 1 }),
     Portfolio.find({ isActive: true }).sort({ order: 1, createdAt: 1 }),
     CompanyInfo.findOne(),
     Founder.find().sort({ order: 1, createdAt: 1 }),
@@ -78,7 +66,9 @@ async function buildKnowledgeContext() {
         .join("\n")
     : "No pricing tiers are currently published.";
 
-  const servicesText = SERVICES.map((s) => `- ${s.title}: ${s.copy}`).join("\n");
+  const servicesText = services.length
+    ? services.map((s) => `- ${s.title}: ${s.copy}`).join("\n")
+    : "No services are currently published.";
 
   const portfolioText = portfolioItems.length
     ? portfolioItems

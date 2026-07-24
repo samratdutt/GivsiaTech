@@ -101,7 +101,7 @@ function ImageUploadField({ value, onUploaded }) {
   );
 }
 
-const TABS = ["overview", "orders", "renewals", "users", "messages", "pricing", "portfolio", "about", "transactions", "reviews", "activity", "security", "bizleads", "newbiz"];
+const TABS = ["overview", "orders", "renewals", "users", "messages", "pricing", "services", "portfolio", "about", "transactions", "reviews", "activity", "security", "bizleads", "newbiz"];
 
 // These two get a visually distinct "AI"-flavored button instead of the
 // plain tab style — the spec calls for a clearly highlighted, dedicated
@@ -124,6 +124,7 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState([]);
   const [leads, setLeads] = useState([]);
   const [pricingTiers, setPricingTiers] = useState([]);
+  const [servicesItems, setServicesItems] = useState([]);
   const [portfolioItems, setPortfolioItems] = useState([]);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [reviews, setReviews] = useState([]);
@@ -141,6 +142,7 @@ export default function AdminDashboard() {
     api.get("/payments/orders").then((res) => setOrders(res.data.orders)).catch(() => {});
     api.get("/contact").then((res) => setLeads(res.data.messages)).catch(() => {});
     api.get("/pricing/all").then((res) => setPricingTiers(res.data.tiers)).catch(() => {});
+    api.get("/services/all").then((res) => setServicesItems(res.data.services)).catch(() => {});
     api.get("/portfolio/all").then((res) => setPortfolioItems(res.data.items)).catch(() => {});
     api.get("/company").then((res) => setCompanyInfo(res.data.info)).catch(() => {});
     api.get("/reviews").then((res) => setReviews(res.data.reviews)).catch(() => {});
@@ -205,6 +207,8 @@ export default function AdminDashboard() {
       {tab === "messages" && <LeadsTab leads={leads} refreshAll={refreshAll} />}
 
       {tab === "pricing" && <PricingTab tiers={pricingTiers} refreshAll={refreshAll} />}
+
+      {tab === "services" && <ServicesTab items={servicesItems} refreshAll={refreshAll} />}
 
       {tab === "portfolio" && <PortfolioTab items={portfolioItems} refreshAll={refreshAll} />}
 
@@ -1302,6 +1306,150 @@ function PricingTab({ tiers, refreshAll }) {
             ))}
             {tiers.length === 0 && (
               <tr><td style={td} colSpan={9}>No pricing tiers yet — add one above.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------ Services ------------------------------ */
+// Feeds the "Services" section on the homepage directly — editing here
+// updates it immediately, the same live-from-Mongo pattern as PricingTab.
+
+function ServicesTab({ items, refreshAll }) {
+  const { showToast } = useToast();
+  const confirm = useConfirm();
+  const [form, setForm] = useState({ tag: "", title: "", copy: "", order: 0 });
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+
+  const createService = async (e) => {
+    e.preventDefault();
+    setError("");
+    setCreating(true);
+    try {
+      await api.post("/services", { ...form, order: Number(form.order) || 0 });
+      setForm({ tag: "", title: "", copy: "", order: 0 });
+      refreshAll();
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not create service");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const startEdit = (s) => {
+    setEditingId(s._id);
+    setEditForm({ tag: s.tag, title: s.title, copy: s.copy, order: s.order });
+  };
+
+  const saveEdit = async (id) => {
+    try {
+      await api.patch(`/services/${id}`, { ...editForm, order: Number(editForm.order) || 0 });
+      setEditingId(null);
+      refreshAll();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not update service", "error");
+    }
+  };
+
+  const toggleActive = async (s) => {
+    try {
+      await api.patch(`/services/${s._id}`, { isActive: !s.isActive });
+      refreshAll();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not update service", "error");
+    }
+  };
+
+  const deleteService = async (s) => {
+    if (!(await confirm(`Delete service "${s.title}"? This can't be undone.`))) return;
+    try {
+      await api.delete(`/services/${s._id}`);
+      refreshAll();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not delete service", "error");
+    }
+  };
+
+  return (
+    <>
+      <form onSubmit={createService} className="responsive-grid-form" style={{ ...createForm, gridTemplateColumns: "1fr 1.2fr 2fr auto auto" }}>
+        <input placeholder="Tag (e.g. Build)" value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })} required />
+        <input placeholder="Title (e.g. Production Websites)" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+        <input placeholder="Copy / description" value={form.copy} onChange={(e) => setForm({ ...form, copy: e.target.value })} required />
+        <input type="number" placeholder="Order" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} style={{ width: 80 }} />
+        <button className="btn btn-primary" type="submit" disabled={creating}>
+          {creating ? "Adding..." : "Add service"}
+        </button>
+      </form>
+      <p style={{ color: "var(--text-dim)", fontSize: "0.78rem", margin: "-8px 0 16px" }}>
+        These are the cards in the homepage's Services section, and are also fed to Givi (the chatbot) as grounding —
+        editing here updates both immediately.
+      </p>
+      {error && <p style={{ color: "#ff6b6b", fontSize: "0.82rem", marginBottom: 16 }}>{error}</p>}
+
+      <div style={tableWrap}>
+        <table style={table}>
+          <thead>
+            <tr>
+              <th style={th}>Tag</th>
+              <th style={th}>Title</th>
+              <th style={th}>Copy</th>
+              <th style={th}>Order</th>
+              <th style={th}>Status</th>
+              <th style={th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((s) => (
+              <tr key={s._id}>
+                {editingId === s._id ? (
+                  <>
+                    <td style={td}><input value={editForm.tag} onChange={(e) => setEditForm({ ...editForm, tag: e.target.value })} /></td>
+                    <td style={td}><input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} /></td>
+                    <td style={td}><input value={editForm.copy} onChange={(e) => setEditForm({ ...editForm, copy: e.target.value })} /></td>
+                    <td style={td}><input type="number" value={editForm.order} onChange={(e) => setEditForm({ ...editForm, order: e.target.value })} style={{ width: 60 }} /></td>
+                    <td style={td}>{s.isActive ? "Active" : "Inactive"}</td>
+                    <td style={td}>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button className="btn btn-primary" style={{ padding: "6px 12px", fontSize: "0.75rem" }} onClick={() => saveEdit(s._id)}>Save</button>
+                        <button className="btn btn-ghost" style={{ padding: "6px 12px", fontSize: "0.75rem" }} onClick={() => setEditingId(null)}>Cancel</button>
+                      </div>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td style={td}>{s.tag}</td>
+                    <td style={td}>{s.title}</td>
+                    <td style={{ ...td, maxWidth: 320 }}>{s.copy}</td>
+                    <td style={td}>{s.order}</td>
+                    <td style={td}>{s.isActive ? "Active" : "Inactive"}</td>
+                    <td style={td}>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button className="btn btn-ghost" style={{ padding: "6px 12px", fontSize: "0.75rem" }} onClick={() => startEdit(s)}>Edit</button>
+                        <button className="btn btn-ghost" style={{ padding: "6px 12px", fontSize: "0.75rem" }} onClick={() => toggleActive(s)}>
+                          {s.isActive ? "Deactivate" : "Activate"}
+                        </button>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ padding: "6px 12px", fontSize: "0.75rem", color: "#ff6b6b", borderColor: "#5a2a2a" }}
+                          onClick={() => deleteService(s)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr><td style={td} colSpan={6}>No services yet — add one above.</td></tr>
             )}
           </tbody>
         </table>
