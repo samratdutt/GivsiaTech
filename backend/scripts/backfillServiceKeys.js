@@ -19,6 +19,20 @@ function slugify(title) {
   );
 }
 
+// The 4 services seedServices.js originally creates use short canonical
+// keys ("website", not "production-websites") to match the serviceKey
+// values Pricing tiers already link against (see models/Pricing.js) — if
+// this migration is run against services that predate the `key` field and
+// were since renamed (title no longer literally slugifies to those short
+// keys), matching by `tag` recovers the right key instead of minting a new
+// one that would silently orphan the existing tier link.
+const CANONICAL_KEY_BY_TAG = {
+  Build: "website",
+  Automate: "ai-automation",
+  Scale: "saas",
+  Mobile: "app-development",
+};
+
 async function run() {
   await mongoose.connect(process.env.MONGO_URI);
 
@@ -28,7 +42,8 @@ async function run() {
   } else {
     const taken = new Set((await Service.find({ key: { $nin: [null, ""] } }, "key")).map((s) => s.key));
     for (const service of unkeyed) {
-      const base = slugify(service.title);
+      const canonical = CANONICAL_KEY_BY_TAG[service.tag];
+      const base = canonical && !taken.has(canonical) ? canonical : slugify(service.title);
       let key = base;
       let n = 2;
       while (taken.has(key)) {
