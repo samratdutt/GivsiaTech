@@ -174,15 +174,19 @@ export default function AdminDashboard() {
   const [visitorSessions, setVisitorSessions] = useState([]);
   const [visitorLeads, setVisitorLeads] = useState([]);
 
-  // Bell-badge tracking for the Activity and Visitors tabs — "last seen"
-  // timestamps persisted per-browser so a badge only reflects genuinely new
-  // client logins / new visitor sessions since this admin last opened that
-  // tab (not since the dawn of the account, and not shared across admins).
+  // Bell-badge tracking for the Activity, Visitors, and Messages tabs —
+  // "last seen" timestamps persisted per-browser so a badge only reflects
+  // genuinely new client logins / new visitor sessions / new contact-form
+  // messages since this admin last opened that tab (not since the dawn of
+  // the account, and not shared across admins).
   const [lastSeenActivityAt, setLastSeenActivityAt] = useState(
     () => Number(localStorage.getItem("givsia_admin_seen_activity")) || 0
   );
   const [lastSeenVisitorsAt, setLastSeenVisitorsAt] = useState(
     () => Number(localStorage.getItem("givsia_admin_seen_visitors")) || 0
+  );
+  const [lastSeenMessagesAt, setLastSeenMessagesAt] = useState(
+    () => Number(localStorage.getItem("givsia_admin_seen_messages")) || 0
   );
 
   const clients = users.filter((u) => u.role === "client");
@@ -207,9 +211,10 @@ export default function AdminDashboard() {
 
   useEffect(refreshAll, []);
 
-  // Covers landing directly on the Activity/Visitors tab via a ?tab= link
-  // (see initialTab above) — openTab below only fires on an actual click,
-  // so a direct-landed tab needs its own one-time "mark seen" on mount.
+  // Covers landing directly on the Activity/Visitors/Messages tab via a
+  // ?tab= link (see initialTab above) — openTab below only fires on an
+  // actual click, so a direct-landed tab needs its own one-time "mark
+  // seen" on mount.
   useEffect(() => {
     const now = Date.now();
     if (tab === "activity") {
@@ -218,18 +223,22 @@ export default function AdminDashboard() {
     } else if (tab === "visitors") {
       localStorage.setItem("givsia_admin_seen_visitors", String(now));
       setLastSeenVisitorsAt(now);
+    } else if (tab === "messages") {
+      localStorage.setItem("givsia_admin_seen_messages", String(now));
+      setLastSeenMessagesAt(now);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Lightweight polling just for the two bell-badge sources — full
+  // Lightweight polling just for the three bell-badge sources — full
   // refreshAll() hits ~15 endpoints, too heavy to run on a timer, but
-  // activity/visitors are cheap and are exactly what the badges need to
-  // stay live while an admin is sitting on some other tab.
+  // activity/visitors/contact leads are cheap and are exactly what the
+  // badges need to stay live while an admin is sitting on some other tab.
   useEffect(() => {
     const poll = setInterval(() => {
       api.get("/activity").then((res) => setActivity(res.data.activity)).catch(() => {});
       api.get("/visitors").then((res) => setVisitorSessions(res.data.sessions)).catch(() => {});
+      api.get("/contact").then((res) => setLeads(res.data.messages)).catch(() => {});
     }, 30000);
     return () => clearInterval(poll);
   }, []);
@@ -239,6 +248,9 @@ export default function AdminDashboard() {
   ).length;
   const unseenVisitorsCount = visitorSessions.filter(
     (s) => new Date(s.firstSeen).getTime() > lastSeenVisitorsAt
+  ).length;
+  const unseenMessagesCount = leads.filter(
+    (l) => new Date(l.createdAt).getTime() > lastSeenMessagesAt
   ).length;
 
   const openTab = (t) => {
@@ -250,6 +262,9 @@ export default function AdminDashboard() {
     } else if (t === "visitors") {
       localStorage.setItem("givsia_admin_seen_visitors", String(now));
       setLastSeenVisitorsAt(now);
+    } else if (t === "messages") {
+      localStorage.setItem("givsia_admin_seen_messages", String(now));
+      setLastSeenMessagesAt(now);
     }
   };
 
@@ -260,7 +275,11 @@ export default function AdminDashboard() {
 
       <div className="dashboard-tab-row" style={tabRow}>
         {TABS.filter((t) => !AI_TAB_LABELS[t]).map((t) => {
-          const unseenCount = t === "activity" ? unseenActivityCount : t === "visitors" ? unseenVisitorsCount : 0;
+          const unseenCount =
+            t === "activity" ? unseenActivityCount
+            : t === "visitors" ? unseenVisitorsCount
+            : t === "messages" ? unseenMessagesCount
+            : 0;
           return (
             <button
               key={t}
