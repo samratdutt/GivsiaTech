@@ -447,6 +447,8 @@ function OrdersTab({ orders, clients, services, expandedOrder, setExpandedOrder,
   });
   const [manualError, setManualError] = useState("");
   const [creatingManual, setCreatingManual] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [refundingId, setRefundingId] = useState(null);
 
   const openOrder = async (orderId) => {
     if (expandedOrder === orderId) {
@@ -530,6 +532,23 @@ function OrdersTab({ orders, clients, services, expandedOrder, setExpandedOrder,
     }
   };
 
+  // Only reachable once a project is cancelled (see the gated button below
+  // and the server-side gate in paymentRoutes.js's /orders/:id/refund) —
+  // covers whatever the client's own 48h self-cancel-refund window missed.
+  const refundOrder = async (o) => {
+    if (!(await confirm(`Refund ₹${(o.amount / 100).toLocaleString("en-IN")} for "${o.title}" via Razorpay? This can't be undone.`))) return;
+    setRefundingId(o._id);
+    try {
+      const { data } = await api.post(`/payments/orders/${o._id}/refund`);
+      showToast(`Refund of ₹${(data.refund.amount / 100).toLocaleString("en-IN")} issued`, "success");
+      refreshAll();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not process refund", "error");
+    } finally {
+      setRefundingId(null);
+    }
+  };
+
   const publishToPortfolio = async (o) => {
     try {
       await api.post(`/portfolio/from-order/${o._id}`);
@@ -565,6 +584,18 @@ function OrdersTab({ orders, clients, services, expandedOrder, setExpandedOrder,
       setCreatingManual(false);
     }
   };
+
+  const filteredOrders = (() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return orders;
+    return orders.filter((o) =>
+      o.invoiceNumber?.toLowerCase().includes(q) ||
+      o._id?.toLowerCase().includes(q) ||
+      o.title?.toLowerCase().includes(q) ||
+      o.client?.name?.toLowerCase().includes(q) ||
+      o.manualClient?.name?.toLowerCase().includes(q)
+    );
+  })();
 
   return (
     <>
@@ -636,11 +667,19 @@ function OrdersTab({ orders, clients, services, expandedOrder, setExpandedOrder,
         </form>
       )}
 
+      <input
+        placeholder="Search by project ID (invoice number), title, or client..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        style={{ marginBottom: 16, maxWidth: 420 }}
+      />
+
       <div style={tableWrap}>
         <table style={table}>
           <thead>
             <tr>
               <th style={th}>Image</th>
+              <th style={th}>Project ID</th>
               <th style={th}>Project</th>
               <th style={th}>Client</th>
               <th style={th}>Amount</th>
@@ -650,7 +689,7 @@ function OrdersTab({ orders, clients, services, expandedOrder, setExpandedOrder,
             </tr>
           </thead>
           <tbody>
-            {orders.map((o) => (
+            {filteredOrders.map((o) => (
               <Fragment key={o._id}>
                 <tr>
                   <td style={td}>
@@ -660,6 +699,7 @@ function OrdersTab({ orders, clients, services, expandedOrder, setExpandedOrder,
                       <span style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>—</span>
                     )}
                   </td>
+                  <td style={{ ...td, fontFamily: "monospace", fontSize: "0.72rem" }}>{o.invoiceNumber || "—"}</td>
                   <td style={td}>
                     {o.title}
                     {o.source === "offline" && <span style={offlineBadge}>offline</span>}
@@ -692,10 +732,27 @@ function OrdersTab({ orders, clients, services, expandedOrder, setExpandedOrder,
                           Invoice
                         </button>
                       )}
+                      {o.status === "cancelled" && o.paymentStatus === "paid" && (
+                        <button
+                          className="btn btn-ghost"
+                          style={{ padding: "6px 12px", fontSize: "0.75rem" }}
+                          onClick={() => refundOrder(o)}
+                          disabled={refundingId === o._id}
+                        >
+                          {refundingId === o._id ? "Refunding..." : "Refund"}
+                        </button>
+                      )}
+                      {o.status === "cancelled" && ["refunded", "refund-pending"].includes(o.paymentStatus) && (
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", alignSelf: "center" }}>
+                          {o.paymentStatus === "refunded" ? "Refunded" : "Refund pending"}
+                        </span>
+                      )}
                       <button
                         className="btn btn-ghost"
                         style={{ padding: "6px 12px", fontSize: "0.75rem", color: "#ff6b6b", borderColor: "#5a2a2a" }}
                         onClick={() => deleteOrder(o)}
+                        disabled={o.status !== "cancelled"}
+                        title={o.status !== "cancelled" ? "Only a cancelled project can be deleted" : undefined}
                       >
                         Delete
                       </button>
@@ -704,7 +761,7 @@ function OrdersTab({ orders, clients, services, expandedOrder, setExpandedOrder,
                 </tr>
                 {expandedOrder === o._id && (
                   <tr>
-                    <td style={{ ...td, background: "var(--bg-soft)" }} colSpan={7}>
+                    <td style={{ ...td, background: "var(--bg-soft)" }} colSpan={8}>
                       {!detail ? (
                         <p style={{ color: "var(--text-dim)" }}>Loading...</p>
                       ) : (
@@ -839,8 +896,8 @@ function OrdersTab({ orders, clients, services, expandedOrder, setExpandedOrder,
                 )}
               </Fragment>
             ))}
-            {orders.length === 0 && (
-              <tr><td style={td} colSpan={7}>No orders yet.</td></tr>
+            {filteredOrders.length === 0 && (
+              <tr><td style={td} colSpan={8}>{orders.length === 0 ? "No orders yet." : "No projects match that search."}</td></tr>
             )}
           </tbody>
         </table>
@@ -925,8 +982,23 @@ function RenewalsTab({ orders }) {
 // than a separate system to keep in sync.
 
 function TransactionsTab({ orders }) {
+  const [searchTerm, setSearchTerm] = useState("");
   const transactions = orders.filter((o) => o.paymentStatus !== "unpaid" || o.razorpayPaymentId);
   const totalPaid = transactions.filter((o) => o.paymentStatus === "paid").reduce((sum, o) => sum + o.amount, 0);
+
+  const filtered = (() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return transactions;
+    return transactions.filter((o) =>
+      o.invoiceNumber?.toLowerCase().includes(q) ||
+      o._id?.toLowerCase().includes(q) ||
+      o.title?.toLowerCase().includes(q) ||
+      o.client?.name?.toLowerCase().includes(q) ||
+      o.manualClient?.name?.toLowerCase().includes(q) ||
+      o.razorpayOrderId?.toLowerCase().includes(q) ||
+      o.razorpayPaymentId?.toLowerCase().includes(q)
+    );
+  })();
 
   return (
     <>
@@ -934,35 +1006,41 @@ function TransactionsTab({ orders }) {
         <StatCard label="Total transactions" value={transactions.length} />
         <StatCard label="Total collected" value={`₹${(totalPaid / 100).toLocaleString("en-IN")}`} />
       </div>
+      <input
+        placeholder="Search by project ID (invoice number), title, client, or Razorpay ID..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        style={{ marginBottom: 16, maxWidth: 460 }}
+      />
       <div style={tableWrap}>
         <table style={table}>
           <thead>
             <tr>
               <th style={th}>Date</th>
+              <th style={th}>Project ID</th>
               <th style={th}>Project</th>
               <th style={th}>Client</th>
               <th style={th}>Amount</th>
               <th style={th}>Status</th>
               <th style={th}>Razorpay order</th>
               <th style={th}>Razorpay payment</th>
-              <th style={th}>Invoice</th>
             </tr>
           </thead>
           <tbody>
-            {transactions.map((o) => (
+            {filtered.map((o) => (
               <tr key={o._id}>
                 <td style={td}>{new Date(o.createdAt).toLocaleDateString()}</td>
+                <td style={{ ...td, fontFamily: "monospace", fontSize: "0.72rem" }}>{o.invoiceNumber || "—"}</td>
                 <td style={td}>{o.title}</td>
                 <td style={td}>{o.client?.name || o.manualClient?.name || "—"}</td>
                 <td style={td}>₹{(o.amount / 100).toLocaleString("en-IN")}</td>
                 <td style={td}>{o.paymentStatus}</td>
                 <td style={{ ...td, fontFamily: "monospace", fontSize: "0.72rem" }}>{o.razorpayOrderId || "—"}</td>
                 <td style={{ ...td, fontFamily: "monospace", fontSize: "0.72rem" }}>{o.razorpayPaymentId || "—"}</td>
-                <td style={td}>{o.invoiceNumber || "—"}</td>
               </tr>
             ))}
-            {transactions.length === 0 && (
-              <tr><td style={td} colSpan={8}>No transactions yet.</td></tr>
+            {filtered.length === 0 && (
+              <tr><td style={td} colSpan={8}>{transactions.length === 0 ? "No transactions yet." : "No transactions match that search."}</td></tr>
             )}
           </tbody>
         </table>

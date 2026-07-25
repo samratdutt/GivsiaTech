@@ -18,6 +18,28 @@ const getRazorpayClient = () =>
     key_secret: process.env.RAZORPAY_KEY_SECRET,
   });
 
+// Shared by the client's self-cancel flow below (auto-refunds within the
+// 48h window) and the admin's manual /orders/:id/refund route further down
+// (for anything outside that window, or any other case a refund needs a
+// human decision) — keeps both flows' Razorpay call, error handling, and
+// Order-field updates in exact sync instead of drifting apart over time.
+// Throws on a Razorpay-side failure; callers decide how to respond to that.
+async function issueRefund(order, reasonNote) {
+  const rzpClient = getRazorpayClient();
+  const refund = await rzpClient.payments.refund(order.razorpayPaymentId, {
+    amount: order.amount, // full refund, in paise — same unit as the original charge
+    speed: "optimum", // instant if Razorpay/the bank supports it for this payment, else normal
+    notes: { reason: reasonNote, orderId: order._id.toString() },
+  });
+
+  order.refundId = refund.id;
+  order.refundStatus = refund.status;
+  order.refundAmount = refund.amount;
+  order.refundedAt = new Date();
+  order.paymentStatus = refund.status === "processed" ? "refunded" : "refund-pending";
+  return refund;
+}
+
 // How far below a tier's listed base price a client can self-select when
 // requesting a project — enforced here (the real boundary) as well as
 // mirrored in the frontend form (ClientDashboard.jsx) for instant feedback.
@@ -361,25 +383,14 @@ router.patch("/orders/:id/cancel", protect, asyncHandler(async (req, res) => {
   // pointing them at support.
   let refund = null;
   if (order.paymentStatus === "paid") {
-    const rzpClient = getRazorpayClient();
     try {
-      refund = await rzpClient.payments.refund(order.razorpayPaymentId, {
-        amount: order.amount, // full refund, in paise — same unit as the original charge
-        speed: "optimum", // instant if Razorpay/the bank supports it for this payment, else normal
-        notes: { reason: "Client self-cancelled within the 48-hour window", orderId: order._id.toString() },
-      });
+      refund = await issueRefund(order, "Client self-cancelled within the 48-hour window");
     } catch (err) {
       return res.status(502).json({
         message: "Could not process your refund automatically — please contact support and we'll sort it out manually.",
         error: err.error?.description || err.message,
       });
     }
-
-    order.refundId = refund.id;
-    order.refundStatus = refund.status;
-    order.refundAmount = refund.amount;
-    order.refundedAt = new Date();
-    order.paymentStatus = refund.status === "processed" ? "refunded" : "refund-pending";
   }
 
   order.status = "cancelled";
@@ -396,6 +407,57 @@ router.patch("/orders/:id/cancel", protect, asyncHandler(async (req, res) => {
     text: refund
       ? `Your project has been cancelled and a refund of Rs. ${(refund.amount / 100).toLocaleString("en-IN")} has been initiated to your original payment method. It can take a few business days to reflect, depending on your bank.`
       : `Your project has been cancelled as requested.`,
+  });
+
+  res.json({ order, refund });
+}));
+
+// @route   POST /api/payments/orders/:id/refund
+// @desc    Admin: manually issue a Razorpay refund for a cancelled project.
+//          Covers whatever the client's own self-cancel flow above doesn't
+//          — outside the 48h window, or any other case a refund needs a
+//          human decision. Only usable once the project is actually
+//          cancelled (regardless of who cancelled it), and only once, on a
+//          paid order — the admin Orders tab's Refund button follows this
+//          exact gate so it's disabled everywhere this would 400.
+router.post("/orders/:id/refund", protect, authorize("admin"), asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id).populate("client", "name email");
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  if (order.status !== "cancelled") {
+    return res.status(400).json({ message: "Only a cancelled project can be refunded" });
+  }
+  if (order.paymentStatus !== "paid") {
+    return res.status(400).json({
+      message: ["unpaid", "failed"].includes(order.paymentStatus)
+        ? "This project was never paid for — nothing to refund"
+        : "This project has already been refunded",
+    });
+  }
+  if (!order.razorpayPaymentId) {
+    return res.status(400).json({ message: "No Razorpay payment is on record for this project" });
+  }
+
+  let refund;
+  try {
+    refund = await issueRefund(order, "Refunded by admin after cancellation");
+  } catch (err) {
+    return res.status(502).json({
+      message: "Razorpay refund failed — please check the payment directly in the Razorpay dashboard",
+      error: err.error?.description || err.message,
+    });
+  }
+
+  order.progressUpdates.push({
+    note: `Refund of ${(refund.amount / 100).toLocaleString("en-IN")} INR issued by admin`,
+    postedBy: req.user._id,
+  });
+  await order.save();
+
+  sendEmail({
+    to: order.client?.email,
+    subject: `Your project "${order.title}" has been refunded`,
+    text: `A refund of Rs. ${(refund.amount / 100).toLocaleString("en-IN")} has been initiated to your original payment method for "${order.title}". It can take a few business days to reflect, depending on your bank.`,
   });
 
   res.json({ order, refund });
@@ -450,12 +512,16 @@ router.post("/orders/manual", protect, authorize("admin"), asyncHandler(async (r
 }));
 
 // @route   DELETE /api/payments/orders/:id
-// @desc    Admin: permanently remove any order. Client: remove their own
-//          project, but only once it's cancelled — a cancelled request
-//          never became a real project and has nothing else (invoices,
-//          progress history a team member relied on) worth keeping, so
-//          clients can clear the clutter themselves instead of asking
-//          support. Anything not yet cancelled stays admin-only to delete.
+// @desc    Admin or the owning client: permanently remove a project, but
+//          only once it's cancelled — for admin this used to be
+//          unconditional, now it isn't: a project that's still
+//          pending/in-progress/completed is a real (or once-real) piece of
+//          work with an invoice and progress history someone may rely on,
+//          so deleting it is only ever safe once it's been cancelled first
+//          (regardless of who cancelled it). Deleting removes the one
+//          underlying record, so it disappears from both the admin panel
+//          and the client's own dashboard at once — there's no separate
+//          per-view copy to clean up.
 router.delete("/orders/:id", protect, asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: "Order not found" });
@@ -463,9 +529,9 @@ router.delete("/orders/:id", protect, asyncHandler(async (req, res) => {
   if (req.user.role !== "admin") {
     const isOwner = order.client?.toString() === req.user._id.toString();
     if (!isOwner) return res.status(403).json({ message: "Not authorized to delete this project" });
-    if (order.status !== "cancelled") {
-      return res.status(400).json({ message: "Only a cancelled project can be deleted" });
-    }
+  }
+  if (order.status !== "cancelled") {
+    return res.status(400).json({ message: "Only a cancelled project can be deleted" });
   }
 
   await order.deleteOne();
