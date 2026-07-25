@@ -5,6 +5,7 @@ import Footer from "./components/Footer.jsx";
 import AmbientField from "./components/AmbientField.jsx";
 import GiviChat from "./components/GiviChat.jsx";
 import CookieConsent from "./components/CookieConsent.jsx";
+import VisitorTracker from "./components/VisitorTracker.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
@@ -67,6 +68,7 @@ export default function App() {
       </div>
       <GiviChat />
       <CookieConsent />
+      <VisitorTracker />
     </>
   );
 }

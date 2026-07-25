@@ -65,6 +65,29 @@ export const passwordResetLimiter = rateLimit({
   handler: violationHandler("password-reset"),
 });
 
+// Pageview pings from every visitor on every navigation — generous, since
+// normal browsing legitimately fires this often, but still capped so a
+// script can't spam session-creation/DB writes.
+export const visitorTrackLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests — please slow down" },
+  handler: violationHandler("visitor-track"),
+});
+
+// The opt-in "send me info" form — tighter, since each submission both
+// writes a lead record and sends a real email.
+export const visitorSignupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many signups from this network — please try again later" },
+  handler: violationHandler("visitor-signup"),
+});
+
 // Upload is authenticated (admin-only) but still capped to blunt storage
 // exhaustion from a compromised/misbehaving admin session.
 export const uploadLimiter = rateLimit({

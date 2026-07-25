@@ -21,6 +21,7 @@ import outreachRoutes from "./routes/outreachRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import securityRoutes from "./routes/securityRoutes.js";
 import bizLeadRoutes from "./routes/bizLeadRoutes.js";
+import visitorRoutes from "./routes/visitorRoutes.js";
 import { UPLOADS_DIR } from "./middleware/upload.js";
 import { activityLogger } from "./middleware/activityLogger.js";
 import { ipBlocklist } from "./middleware/ipBlocklist.js";
@@ -126,6 +127,7 @@ app.use("/api/outreach", outreachRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api/security", securityRoutes);
 app.use("/api/bizleads", bizLeadRoutes);
+app.use("/api/visitors", visitorRoutes);
 
 app.use((req, res) => res.status(404).json({ message: "Route not found" }));
 

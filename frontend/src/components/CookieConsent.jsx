@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
+import api from "../api/axios.js";
+import { getVisitorId } from "../utils/visitor.js";
 
 const STORAGE_KEY = "givsia_cookie_consent";
+// Tracks whether the separate "send me info" opt-in step has already been
+// shown once — it's a one-time ask, distinct from cookie consent, never
+// re-prompted on later visits regardless of whether they subscribed.
+const OPTIN_PROMPTED_KEY = "givsia_optin_prompted";
 
 // Flat, single-color cookie mark (outline body with a bite notch + a few
 // crumb dots) — colored per theme via the --cookie-icon-color CSS variable
@@ -20,8 +26,10 @@ function CookieIcon() {
 
 export default function CookieConsent() {
   const [visible, setVisible] = useState(false);
-  const [view, setView] = useState("main"); // "main" | "customize"
+  const [view, setView] = useState("main"); // "main" | "customize" | "optin"
   const [analytics, setAnalytics] = useState(false);
+  const [optinForm, setOptinForm] = useState({ name: "", email: "", phone: "" });
+  const [optinStatus, setOptinStatus] = useState("idle"); // idle | sending | sent | error
 
   useEffect(() => {
     if (!localStorage.getItem(STORAGE_KEY)) {
@@ -41,7 +49,30 @@ export default function CookieConsent() {
 
   const save = (prefs) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...prefs, essential: true, at: Date.now() }));
-    setVisible(false);
+    // Lets VisitorTracker.jsx track the current page immediately if
+    // analytics was just turned on, instead of waiting for the next
+    // navigation (it can't just read localStorage on its own — nothing
+    // fires a storage event within the same tab that wrote it).
+    window.dispatchEvent(new Event("givsia-consent-changed"));
+
+    if (!localStorage.getItem(OPTIN_PROMPTED_KEY)) {
+      localStorage.setItem(OPTIN_PROMPTED_KEY, "1");
+      setView("optin");
+    } else {
+      setVisible(false);
+    }
+  };
+
+  const submitOptin = async (e) => {
+    e.preventDefault();
+    setOptinStatus("sending");
+    try {
+      await api.post("/visitors/signup", { ...optinForm, sessionId: getVisitorId() });
+      setOptinStatus("sent");
+      setTimeout(() => setVisible(false), 1800);
+    } catch (err) {
+      setOptinStatus("error");
+    }
   };
 
   if (!visible) return null;
@@ -51,7 +82,7 @@ export default function CookieConsent() {
       <div className="cookie-bar-inner">
         <div className="cookie-bar-icon"><CookieIcon /></div>
 
-        {view === "main" ? (
+        {view === "main" && (
           <>
             <div className="cookie-bar-text">
               <h3 className="cookie-bar-title">Cookie settings</h3>
@@ -66,7 +97,9 @@ export default function CookieConsent() {
               <button type="button" className="btn btn-primary" onClick={() => save({ analytics: true })}>Accept</button>
             </div>
           </>
-        ) : (
+        )}
+
+        {view === "customize" && (
           <>
             <div className="cookie-bar-text">
               <h3 className="cookie-bar-title">Customize preferences</h3>
@@ -86,6 +119,57 @@ export default function CookieConsent() {
             <div className="cookie-bar-actions">
               <button type="button" className="btn btn-ghost" onClick={() => setView("main")}>Back</button>
               <button type="button" className="btn btn-primary" onClick={() => save({ analytics })}>Save preferences</button>
+            </div>
+          </>
+        )}
+
+        {view === "optin" && (
+          <>
+            <div className="cookie-bar-text">
+              <h3 className="cookie-bar-title">Want to hear about our services?</h3>
+              {optinStatus === "sent" ? (
+                <p className="cookie-bar-copy">Thanks — check your inbox!</p>
+              ) : (
+                <>
+                  <p className="cookie-bar-copy">
+                    Completely optional, and separate from the cookie choice above — leave your email (and phone, if
+                    you like) and we'll send you one note about what GivsiaTech offers. We won't use it for anything
+                    else or email you again unless you reach out first.
+                  </p>
+                  <form onSubmit={submitOptin} className="cookie-optin-form">
+                    <input
+                      type="text"
+                      placeholder="Name (optional)"
+                      value={optinForm.name}
+                      onChange={(e) => setOptinForm({ ...optinForm, name: e.target.value })}
+                    />
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      required
+                      value={optinForm.email}
+                      onChange={(e) => setOptinForm({ ...optinForm, email: e.target.value })}
+                    />
+                    <input
+                      type="tel"
+                      placeholder="Phone (optional)"
+                      value={optinForm.phone}
+                      onChange={(e) => setOptinForm({ ...optinForm, phone: e.target.value })}
+                    />
+                    <button type="submit" className="btn btn-primary" disabled={optinStatus === "sending"}>
+                      {optinStatus === "sending" ? "Sending..." : "Send me info"}
+                    </button>
+                  </form>
+                  {optinStatus === "error" && (
+                    <p className="cookie-bar-copy" style={{ color: "#ff6b6b" }}>Something went wrong — try again later.</p>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="cookie-bar-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setVisible(false)}>
+                {optinStatus === "sent" ? "Close" : "No thanks"}
+              </button>
             </div>
           </>
         )}

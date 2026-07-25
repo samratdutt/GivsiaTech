@@ -101,7 +101,7 @@ function ImageUploadField({ value, onUploaded }) {
   );
 }
 
-const TABS = ["overview", "orders", "renewals", "users", "messages", "pricing", "services", "portfolio", "about", "transactions", "reviews", "activity", "security", "bizleads", "newbiz"];
+const TABS = ["overview", "orders", "renewals", "users", "messages", "pricing", "services", "portfolio", "about", "transactions", "reviews", "activity", "security", "visitors", "bizleads", "newbiz"];
 
 // These two get a visually distinct "AI"-flavored button instead of the
 // plain tab style — the spec calls for a clearly highlighted, dedicated
@@ -133,6 +133,8 @@ export default function AdminDashboard() {
   const [securitySummary, setSecuritySummary] = useState(null);
   const [securityEvents, setSecurityEvents] = useState([]);
   const [blockedIps, setBlockedIps] = useState([]);
+  const [visitorSessions, setVisitorSessions] = useState([]);
+  const [visitorLeads, setVisitorLeads] = useState([]);
 
   const clients = users.filter((u) => u.role === "client");
 
@@ -150,6 +152,8 @@ export default function AdminDashboard() {
     api.get("/security/summary").then((res) => setSecuritySummary(res.data)).catch(() => {});
     api.get("/security/events").then((res) => setSecurityEvents(res.data.events)).catch(() => {});
     api.get("/security/blocked-ips").then((res) => setBlockedIps(res.data.blocked)).catch(() => {});
+    api.get("/visitors").then((res) => setVisitorSessions(res.data.sessions)).catch(() => {});
+    api.get("/visitors/leads").then((res) => setVisitorLeads(res.data.leads)).catch(() => {});
   };
 
   useEffect(refreshAll, []);
@@ -228,6 +232,10 @@ export default function AdminDashboard() {
           blocked={blockedIps}
           refreshAll={refreshAll}
         />
+      )}
+
+      {tab === "visitors" && (
+        <VisitorsTab sessions={visitorSessions} leads={visitorLeads} refreshAll={refreshAll} />
       )}
 
       {tab === "bizleads" && (
@@ -1809,6 +1817,164 @@ function SeverityBadge({ severity }) {
     >
       {severity}
     </span>
+  );
+}
+
+/* ------------------------------ Visitors ------------------------------ */
+// Two separate things, deliberately kept apart: anonymous analytics
+// sessions (pages viewed, device/browser, no PII — collected only once a
+// visitor accepts analytics cookies, see CookieConsent.jsx) and opt-in
+// leads (name/email/phone, collected only when a visitor explicitly
+// submits the "send me info" form — never inferred from cookie consent).
+
+function VisitorsTab({ sessions, leads, refreshAll }) {
+  const { showToast } = useToast();
+  const confirm = useConfirm();
+  const [section, setSection] = useState("sessions"); // "sessions" | "leads"
+  const [deletingId, setDeletingId] = useState(null);
+
+  const deleteSession = async (id) => {
+    setDeletingId(id);
+    try {
+      await api.delete(`/visitors/${id}`);
+      refreshAll();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not delete session", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const deleteLead = async (l) => {
+    if (!(await confirm(`Delete the opt-in record for "${l.email}"? This can't be undone.`))) return;
+    setDeletingId(l._id);
+    try {
+      await api.delete(`/visitors/leads/${l._id}`);
+      refreshAll();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not delete lead", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <>
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <button
+          className={section === "sessions" ? "btn btn-primary" : "btn btn-ghost"}
+          style={{ padding: "6px 16px", fontSize: "0.8rem" }}
+          onClick={() => setSection("sessions")}
+        >
+          Analytics ({sessions.length})
+        </button>
+        <button
+          className={section === "leads" ? "btn btn-primary" : "btn btn-ghost"}
+          style={{ padding: "6px 16px", fontSize: "0.8rem" }}
+          onClick={() => setSection("leads")}
+        >
+          Opt-in signups ({leads.length})
+        </button>
+      </div>
+
+      {section === "sessions" ? (
+        <>
+          <p style={{ color: "var(--text-dim)", fontSize: "0.78rem", marginBottom: 16 }}>
+            Anonymous browsing sessions — only recorded once a visitor accepts analytics cookies. No name, email, or
+            phone here; sessions auto-expire 90 days after their last activity.
+          </p>
+          <div style={tableWrap}>
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>First seen</th>
+                  <th style={th}>Last seen</th>
+                  <th style={th}>Visits</th>
+                  <th style={th}>Pages</th>
+                  <th style={th}>Device</th>
+                  <th style={th}>Browser / OS</th>
+                  <th style={th}>Referrer</th>
+                  <th style={th}>IP</th>
+                  <th style={th}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map((s) => (
+                  <tr key={s._id}>
+                    <td style={td}>{new Date(s.firstSeen).toLocaleString()}</td>
+                    <td style={td}>{new Date(s.lastSeen).toLocaleString()}</td>
+                    <td style={td}>{s.visitCount}</td>
+                    <td style={{ ...td, maxWidth: 220 }}>{s.pages?.join(", ") || "—"}</td>
+                    <td style={td}>{s.deviceType}</td>
+                    <td style={td}>{s.browser} / {s.os}</td>
+                    <td style={{ ...td, maxWidth: 160 }}>{s.referrer || "direct"}</td>
+                    <td style={td}>{s.ip}</td>
+                    <td style={td}>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ padding: "6px 12px", fontSize: "0.75rem", color: "#ff6b6b", borderColor: "#5a2a2a" }}
+                        onClick={() => deleteSession(s._id)}
+                        disabled={deletingId === s._id}
+                      >
+                        {deletingId === s._id ? "Deleting..." : "Delete"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {sessions.length === 0 && (
+                  <tr><td style={td} colSpan={9}>No visitor sessions recorded yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <>
+          <p style={{ color: "var(--text-dim)", fontSize: "0.78rem", marginBottom: 16 }}>
+            Visitors who explicitly asked to hear about our services (the opt-in form shown after the cookie banner)
+            — each one was sent a one-off intro email when they signed up.
+          </p>
+          <div style={tableWrap}>
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Date</th>
+                  <th style={th}>Name</th>
+                  <th style={th}>Email</th>
+                  <th style={th}>Phone</th>
+                  <th style={th}>Emailed</th>
+                  <th style={th}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {leads.map((l) => (
+                  <tr key={l._id}>
+                    <td style={td}>{new Date(l.createdAt).toLocaleString()}</td>
+                    <td style={td}>{l.name || "—"}</td>
+                    <td style={td}>{l.email}</td>
+                    <td style={td}>{l.phone || "—"}</td>
+                    <td style={td}>{l.emailedAt ? new Date(l.emailedAt).toLocaleString() : "—"}</td>
+                    <td style={td}>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ padding: "6px 12px", fontSize: "0.75rem", color: "#ff6b6b", borderColor: "#5a2a2a" }}
+                        onClick={() => deleteLead(l)}
+                        disabled={deletingId === l._id}
+                      >
+                        {deletingId === l._id ? "Deleting..." : "Delete"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {leads.length === 0 && (
+                  <tr><td style={td} colSpan={6}>No opt-in signups yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </>
   );
 }
 
