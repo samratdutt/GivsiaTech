@@ -450,10 +450,24 @@ router.post("/orders/manual", protect, authorize("admin"), asyncHandler(async (r
 }));
 
 // @route   DELETE /api/payments/orders/:id
-// @desc    Admin: permanently remove a project/order record.
-router.delete("/orders/:id", protect, authorize("admin"), asyncHandler(async (req, res) => {
+// @desc    Admin: permanently remove any order. Client: remove their own
+//          project, but only once it's cancelled — a cancelled request
+//          never became a real project and has nothing else (invoices,
+//          progress history a team member relied on) worth keeping, so
+//          clients can clear the clutter themselves instead of asking
+//          support. Anything not yet cancelled stays admin-only to delete.
+router.delete("/orders/:id", protect, asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: "Order not found" });
+
+  if (req.user.role !== "admin") {
+    const isOwner = order.client?.toString() === req.user._id.toString();
+    if (!isOwner) return res.status(403).json({ message: "Not authorized to delete this project" });
+    if (order.status !== "cancelled") {
+      return res.status(400).json({ message: "Only a cancelled project can be deleted" });
+    }
+  }
+
   await order.deleteOne();
   res.json({ message: "Order deleted" });
 }));

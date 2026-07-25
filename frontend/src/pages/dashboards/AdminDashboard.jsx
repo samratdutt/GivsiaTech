@@ -219,7 +219,7 @@ export default function AdminDashboard() {
 
       {tab === "reviews" && <ReviewsTab reviews={reviews} refreshAll={refreshAll} />}
 
-      {tab === "activity" && <ActivityTab activity={activity} />}
+      {tab === "activity" && <ActivityTab activity={activity} refreshAll={refreshAll} />}
 
       {tab === "security" && (
         <SecurityTab
@@ -1705,37 +1705,90 @@ function AboutTab({ info, refreshAll }) {
 
 /* ------------------------------ Activity ------------------------------ */
 
-function ActivityTab({ activity }) {
+function ActivityTab({ activity, refreshAll }) {
+  const { showToast } = useToast();
+  const confirm = useConfirm();
+  const [deletingId, setDeletingId] = useState(null);
+  const [clearing, setClearing] = useState(false);
+
+  const deleteEntry = async (id) => {
+    setDeletingId(id);
+    try {
+      await api.delete(`/activity/${id}`);
+      refreshAll();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not delete activity entry", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const clearAll = async () => {
+    if (!(await confirm(`Delete all ${activity.length} activity entries? This can't be undone.`))) return;
+    setClearing(true);
+    try {
+      await api.delete("/activity");
+      refreshAll();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not clear activity", "error");
+    } finally {
+      setClearing(false);
+    }
+  };
+
   return (
-    <div style={tableWrap}>
-      <table style={table}>
-        <thead>
-          <tr>
-            <th style={th}>When</th>
-            <th style={th}>Who</th>
-            <th style={th}>Action</th>
-            <th style={th}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {activity.map((a) => (
-            <tr key={a._id}>
-              <td style={td}>{new Date(a.createdAt).toLocaleString()}</td>
-              <td style={td}>
-                {a.userName ? `${a.userName} (${a.role})` : "Anonymous"}
-              </td>
-              <td style={td}>{a.action}</td>
-              <td style={td}>
-                <span style={{ color: a.statusCode < 400 ? "#4ade80" : "#ff6b6b" }}>{a.statusCode}</span>
-              </td>
+    <>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <button
+          className="btn btn-ghost"
+          style={{ padding: "6px 14px", fontSize: "0.75rem", color: "#ff6b6b", borderColor: "#5a2a2a" }}
+          onClick={clearAll}
+          disabled={clearing || activity.length === 0}
+        >
+          {clearing ? "Clearing..." : "Clear all"}
+        </button>
+      </div>
+      <div style={tableWrap}>
+        <table style={table}>
+          <thead>
+            <tr>
+              <th style={th}>When</th>
+              <th style={th}>Who</th>
+              <th style={th}>Action</th>
+              <th style={th}>Status</th>
+              <th style={th}></th>
             </tr>
-          ))}
-          {activity.length === 0 && (
-            <tr><td style={td} colSpan={4}>No activity recorded yet.</td></tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {activity.map((a) => (
+              <tr key={a._id}>
+                <td style={td}>{new Date(a.createdAt).toLocaleString()}</td>
+                <td style={td}>
+                  {a.userName ? `${a.userName} (${a.role})` : "Anonymous"}
+                </td>
+                <td style={td}>{a.action}</td>
+                <td style={td}>
+                  <span style={{ color: a.statusCode < 400 ? "#4ade80" : "#ff6b6b" }}>{a.statusCode}</span>
+                </td>
+                <td style={td}>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ padding: "6px 12px", fontSize: "0.75rem", color: "#ff6b6b", borderColor: "#5a2a2a" }}
+                    onClick={() => deleteEntry(a._id)}
+                    disabled={deletingId === a._id}
+                  >
+                    {deletingId === a._id ? "Deleting..." : "Delete"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {activity.length === 0 && (
+              <tr><td style={td} colSpan={5}>No activity recorded yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

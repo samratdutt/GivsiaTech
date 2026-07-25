@@ -247,6 +247,21 @@ export default function ClientDashboard() {
     }
   };
 
+  const [deletingOrderId, setDeletingOrderId] = useState(null);
+  const deleteOrder = async (orderId) => {
+    if (!(await confirm("Permanently delete this cancelled project? This can't be undone."))) return;
+    setDeletingOrderId(orderId);
+    try {
+      await api.delete(`/payments/orders/${orderId}`);
+      showToast("Project deleted", "success");
+      fetchOrders();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not delete project", "error");
+    } finally {
+      setDeletingOrderId(null);
+    }
+  };
+
   const submitSupport = async (e) => {
     e.preventDefault();
     setSupportMessage("");
@@ -423,6 +438,16 @@ export default function ClientDashboard() {
                   <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", alignSelf: "center" }}>
                     Cancellation window passed — use Support below to request one
                   </span>
+                )}
+                {o.status === "cancelled" && (
+                  <button
+                    className="btn btn-ghost"
+                    style={{ padding: "6px 14px", fontSize: "0.75rem", color: "#ff6b6b", borderColor: "#5a2a2a" }}
+                    onClick={() => deleteOrder(o._id)}
+                    disabled={deletingOrderId === o._id}
+                  >
+                    {deletingOrderId === o._id ? "Deleting..." : "Delete"}
+                  </button>
                 )}
               </div>
 

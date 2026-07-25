@@ -14,4 +14,21 @@ router.get("/", protect, authorize("admin"), asyncHandler(async (req, res) => {
   res.json({ activity });
 }));
 
+// @route   DELETE /api/activity/:id
+// @desc    Admin — remove a single activity entry. This is just a rolling
+//          feed (auto-expires after 30 days anyway, see ActivityLog.js), so
+//          deleting one has no effect on any real business record.
+router.delete("/:id", protect, authorize("admin"), asyncHandler(async (req, res) => {
+  const entry = await ActivityLog.findByIdAndDelete(req.params.id);
+  if (!entry) return res.status(404).json({ message: "Activity entry not found" });
+  res.json({ message: "Activity entry deleted" });
+}));
+
+// @route   DELETE /api/activity
+// @desc    Admin — clear the entire activity feed in one go.
+router.delete("/", protect, authorize("admin"), asyncHandler(async (req, res) => {
+  const { deletedCount } = await ActivityLog.deleteMany({});
+  res.json({ message: "Activity cleared", deletedCount });
+}));
+
 export default router;
