@@ -24,6 +24,18 @@ const getRazorpayClient = () =>
 // A tier with no basePrice set (or service "other") has no enforced floor.
 const PRICE_FLOOR_DISCOUNT = 5000;
 
+// An online order that's never been successfully paid (or whose only
+// attempt failed) is a client-side-only draft, not a real project yet — it
+// must not appear anywhere in the admin panel (Orders, Renewals,
+// Transactions, the Overview dashboard's counts/recent-orders feed) until
+// payment actually succeeds. Offline orders (admin-logged deals) always
+// qualify — they're marked "paid" by default and were never gated on an
+// online checkout in the first place. Reused by every admin-facing order
+// query below so all of them agree on the same definition.
+export const ADMIN_VISIBLE_ORDER_FILTER = {
+  $or: [{ source: "offline" }, { paymentStatus: { $nin: ["unpaid", "failed"] } }],
+};
+
 // @route   POST /api/payments/create-order
 // @desc    Client creates a service order + a Razorpay order to pay for it
 router.post("/create-order", protect, async (req, res) => {
@@ -82,6 +94,65 @@ router.post("/create-order", protect, async (req, res) => {
     res.status(500).json({ message: "Could not create payment order", error: err.message });
   }
 });
+
+// @route   POST /api/payments/orders/:id/retry
+// @desc    Client: re-attempt payment on their own existing unpaid/failed
+//          order — reuses the same Order record with a fresh Razorpay order
+//          (the original one may already be stale/attempted), instead of
+//          the client having to re-submit the request-project form and end
+//          up with a duplicate. The order stays invisible to admin (see
+//          ADMIN_VISIBLE_ORDER_FILTER) until this succeeds.
+router.post("/orders/:id/retry", protect, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (!order.client || order.client.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized to pay for this project" });
+    }
+    if (!["unpaid", "failed"].includes(order.paymentStatus)) {
+      return res.status(400).json({ message: "This project has already been paid for" });
+    }
+    if (order.status === "cancelled") {
+      return res.status(400).json({ message: "This project was cancelled — request a new one instead" });
+    }
+
+    const rzpClient = getRazorpayClient();
+    const rzpOrder = await rzpClient.orders.create({
+      amount: order.amount,
+      currency: order.currency || "INR",
+      receipt: order._id.toString(),
+    });
+
+    order.razorpayOrderId = rzpOrder.id;
+    order.paymentStatus = "unpaid";
+    await order.save();
+
+    res.json({
+      orderId: order._id,
+      razorpayOrderId: rzpOrder.id,
+      amount: order.amount,
+      currency: order.currency || "INR",
+      keyId: process.env.RAZORPAY_KEY_ID,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Could not restart payment", error: err.message });
+  }
+});
+
+// @route   PATCH /api/payments/orders/:id/mark-failed
+// @desc    Client: record that their own checkout attempt failed (called
+//          from the frontend's Razorpay `payment.failed` handler). Only
+//          moves unpaid -> failed — never overwrites an order some other
+//          request already marked paid in the meantime.
+router.patch("/orders/:id/mark-failed", protect, asyncHandler(async (req, res) => {
+  const order = await Order.findOneAndUpdate(
+    { _id: req.params.id, client: req.user._id, paymentStatus: "unpaid" },
+    { paymentStatus: "failed" },
+    { new: true }
+  );
+  if (!order) return res.status(404).json({ message: "Order not found" });
+  res.json({ order });
+}));
 
 // @route   POST /api/payments/verify
 // @desc    Verify Razorpay payment signature after checkout completes on the frontend
@@ -143,6 +214,19 @@ router.post("/webhook", asyncHandler(async (req, res) => {
     );
   }
 
+  // Server-to-server backstop for the frontend's payment.failed handler
+  // (see /orders/:id/mark-failed) — catches a declined payment even if the
+  // client's browser closed/crashed before it could call that route itself.
+  // Only touches an order still "unpaid" so it can never clobber a payment
+  // that a near-simultaneous payment.captured already marked "paid".
+  if (event.event === "payment.failed") {
+    const rzpOrderId = event.payload.payment.entity.order_id;
+    await Order.findOneAndUpdate(
+      { razorpayOrderId: rzpOrderId, paymentStatus: "unpaid" },
+      { paymentStatus: "failed" }
+    );
+  }
+
   // Refunds aren't always instant — /orders/:id/cancel below already sets
   // paymentStatus to "refund-pending" (or "refunded" if Razorpay confirmed
   // it synchronously) the moment a refund is issued. This event is the
@@ -161,9 +245,12 @@ router.post("/webhook", asyncHandler(async (req, res) => {
 }));
 
 // @route   GET /api/payments/orders
-// @desc    Admin: view all orders. Client: view own orders.
+// @desc    Admin: view all orders that have actually been paid for (see
+//          ADMIN_VISIBLE_ORDER_FILTER). Client: view every one of their own
+//          orders regardless of payment status — an unpaid/failed one is
+//          exactly what they need to see so they can retry it.
 router.get("/orders", protect, asyncHandler(async (req, res) => {
-  const filter = req.user.role === "client" ? { client: req.user._id } : {};
+  const filter = req.user.role === "client" ? { client: req.user._id } : ADMIN_VISIBLE_ORDER_FILTER;
   const orders = await Order.find(filter)
     .populate("client", "name email company")
     .sort({ createdAt: -1 });

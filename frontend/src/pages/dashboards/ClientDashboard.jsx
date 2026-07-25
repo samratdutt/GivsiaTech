@@ -109,10 +109,16 @@ export default function ClientDashboard() {
 
   // Default the form to the first available service once services load, so
   // the amount floor below is meaningful from the start instead of "" -> 0.
+  // A "Get a quote" click on a specific pricing tier (PricingSection.jsx)
+  // arrives here as ?service=<key> — pre-select that exact service instead
+  // of the generic first one, so the client lands on the request-project
+  // form already pointed at the tier they actually clicked.
   useEffect(() => {
     if (!form.service && services.length) {
-      const tier = pricingTiers.find((t) => t.serviceKey === services[0].key);
-      setForm((f) => ({ ...f, service: services[0].key, amount: (tier?.basePrice || 5000) }));
+      const requested = new URLSearchParams(window.location.search).get("service");
+      const key = requested && services.some((s) => s.key === requested) ? requested : services[0].key;
+      const tier = pricingTiers.find((t) => t.serviceKey === key);
+      setForm((f) => ({ ...f, service: key, amount: (tier?.basePrice || 5000) }));
     }
   }, [services, pricingTiers]);
 
@@ -141,6 +147,33 @@ export default function ClientDashboard() {
     setShowTerms(true);
   };
 
+  // Shared by a fresh request and a retry on an existing unpaid/failed
+  // order — both just need a Razorpay order to open checkout against.
+  // orderIdForFailure is whichever Order this checkout is for, so a
+  // declined payment can be recorded against the right record (see
+  // paymentRoutes.js's payment.failed handler → the client dashboard then
+  // shows a "Retry payment" button on it instead of it silently vanishing).
+  const openRazorpayCheckout = (data, description, orderIdForFailure) => {
+    const rzp = new window.Razorpay({
+      key: data.keyId,
+      amount: data.amount,
+      currency: data.currency,
+      name: "GivsiaTech",
+      description,
+      order_id: data.razorpayOrderId,
+      handler: async (response) => {
+        await api.post("/payments/verify", response);
+        fetchOrders();
+      },
+      prefill: { name: user?.name, email: user?.email },
+      theme: { color: "#8B6FE8" },
+    });
+    rzp.on("payment.failed", () => {
+      api.patch(`/payments/orders/${orderIdForFailure}/mark-failed`).finally(fetchOrders);
+    });
+    rzp.open();
+  };
+
   const startCheckout = async () => {
     setShowTerms(false);
     setPaying(true);
@@ -154,26 +187,33 @@ export default function ClientDashboard() {
 
     try {
       const { data } = await api.post("/payments/create-order", form);
-
-      const rzp = new window.Razorpay({
-        key: data.keyId,
-        amount: data.amount,
-        currency: data.currency,
-        name: "GivsiaTech",
-        description: form.title,
-        order_id: data.razorpayOrderId,
-        handler: async (response) => {
-          await api.post("/payments/verify", response);
-          fetchOrders();
-        },
-        prefill: { name: user?.name, email: user?.email },
-        theme: { color: "#8B6FE8" },
-      });
-      rzp.open();
+      openRazorpayCheckout(data, form.title, data.orderId);
     } catch (err) {
       showToast(err.response?.data?.message || "Could not start checkout", "error");
     } finally {
       setPaying(false);
+    }
+  };
+
+  // Re-attempts payment on an order that's already been requested but never
+  // paid (or whose last attempt failed) — same order, fresh Razorpay order,
+  // no duplicate project created.
+  const [retryingId, setRetryingId] = useState(null);
+  const retryPayment = async (order) => {
+    setRetryingId(order._id);
+    const ready = await loadRazorpayScript();
+    if (!ready) {
+      showToast("Could not load payment gateway. Check your connection.", "error");
+      setRetryingId(null);
+      return;
+    }
+    try {
+      const { data } = await api.post(`/payments/orders/${order._id}/retry`);
+      openRazorpayCheckout(data, order.title, order._id);
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not restart payment", "error");
+    } finally {
+      setRetryingId(null);
     }
   };
 
@@ -351,6 +391,16 @@ export default function ClientDashboard() {
 
               <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
                 <span style={statusBadge(o.status)}>{o.status}</span>
+                {["unpaid", "failed"].includes(o.paymentStatus) && o.status !== "cancelled" && (
+                  <button
+                    className="btn btn-primary"
+                    style={{ padding: "6px 14px", fontSize: "0.75rem" }}
+                    onClick={() => retryPayment(o)}
+                    disabled={retryingId === o._id}
+                  >
+                    {retryingId === o._id ? "Opening checkout..." : o.paymentStatus === "failed" ? "Retry payment" : "Pay now"}
+                  </button>
+                )}
                 <button className="btn btn-ghost" style={{ padding: "6px 14px", fontSize: "0.75rem" }} onClick={() => toggleDetail(o._id)}>
                   {expanded === o._id ? "Hide details" : "View status & invoice"}
                 </button>

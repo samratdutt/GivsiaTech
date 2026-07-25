@@ -45,7 +45,7 @@ function PricingPage({ tier, side, turningClass, onQuoteClick, activeQuote }) {
       </ul>
       <button
         type="button"
-        onClick={(e) => onQuoteClick(e, tier.name)}
+        onClick={(e) => onQuoteClick(e, tier)}
         className={tier.featured ? "btn btn-primary" : "btn btn-ghost"}
         style={{
           width: "100%",
@@ -123,21 +123,29 @@ export default function PricingSection() {
   // Requesting a quote is a business-security-relevant step (it's the path
   // toward a paid engagement), so it's gated behind an explicit Terms &
   // Conditions agreement rather than navigating straight away.
-  const handleQuoteClick = (e, tierName) => {
+  const handleQuoteClick = (e, tier) => {
     e.preventDefault();
-    setPendingTier(tierName);
+    setPendingTier(tier);
     setShowTerms(true);
   };
 
   const proceedAfterAgree = () => {
     setShowTerms(false);
-    setActiveQuote(pendingTier);
+    setActiveQuote(pendingTier?.name);
+    const serviceKey = pendingTier?.serviceKey;
     setTimeout(() => {
       setActiveQuote(null);
       if (!user) return navigate("/register");
       if (user.role === "service") {
         showToast("Service accounts can't request a project — that's only available for clients.", "info");
         return;
+      }
+      // A client lands on the request-project form pre-pointed at the exact
+      // service this tier is linked to (see ClientDashboard.jsx's
+      // ?service= handling), instead of a generic form they'd have to
+      // re-select the service on themselves.
+      if (user.role === "client" && serviceKey) {
+        return navigate(`/dashboard/client?service=${encodeURIComponent(serviceKey)}#request-project`);
       }
       navigate(QUOTE_DESTINATION[user.role] || "/register");
     }, 400);

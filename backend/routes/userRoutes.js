@@ -3,6 +3,7 @@ import crypto from "crypto";
 import User from "../models/User.js";
 import Order from "../models/Order.js";
 import ContactMessage from "../models/ContactMessage.js";
+import { ADMIN_VISIBLE_ORDER_FILTER } from "./paymentRoutes.js";
 import { protect } from "../middleware/auth.js";
 import { authorize } from "../middleware/role.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
@@ -183,14 +184,14 @@ router.get("/dashboard-summary", protect, asyncHandler(async (req, res) => {
   if (role === "admin") {
     const [userCount, orderCount, revenueAgg, pendingOrders, newLeads, recentOrders] = await Promise.all([
       User.countDocuments(),
-      Order.countDocuments(),
+      Order.countDocuments(ADMIN_VISIBLE_ORDER_FILTER),
       Order.aggregate([
         { $match: { paymentStatus: "paid" } },
         { $group: { _id: null, total: { $sum: "$amount" } } },
       ]),
-      Order.countDocuments({ status: { $in: ["pending", "in-progress"] } }),
+      Order.countDocuments({ ...ADMIN_VISIBLE_ORDER_FILTER, status: { $in: ["pending", "in-progress"] } }),
       ContactMessage.countDocuments({ status: "new" }),
-      Order.find().sort({ createdAt: -1 }).limit(5).populate("client", "name email"),
+      Order.find(ADMIN_VISIBLE_ORDER_FILTER).sort({ createdAt: -1 }).limit(5).populate("client", "name email"),
     ]);
     return res.json({
       role,
