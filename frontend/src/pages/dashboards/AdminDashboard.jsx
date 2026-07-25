@@ -101,6 +101,44 @@ function ImageUploadField({ value, onUploaded }) {
   );
 }
 
+// Small bell icon + count, shown on the Activity/Visitors tab buttons when
+// there's something new since this admin last opened that tab (see
+// unseenActivityCount/unseenVisitorsCount and openTab in AdminDashboard).
+function BellIcon({ size = 11 }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" width={size} height={size}>
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </svg>
+  );
+}
+
+function TabBellBadge({ count }) {
+  return (
+    <span
+      style={{
+        position: "absolute",
+        top: -8,
+        right: -8,
+        display: "flex",
+        alignItems: "center",
+        gap: 3,
+        background: "#ff6b6b",
+        color: "#fff",
+        borderRadius: 999,
+        padding: "3px 6px",
+        fontSize: "0.65rem",
+        fontWeight: 700,
+        lineHeight: 1,
+        boxShadow: "0 0 0 2px var(--bg)",
+      }}
+    >
+      <BellIcon />
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
 const TABS = ["overview", "orders", "renewals", "users", "messages", "pricing", "services", "portfolio", "about", "transactions", "reviews", "activity", "security", "visitors", "bizleads", "newbiz"];
 
 // These two get a visually distinct "AI"-flavored button instead of the
@@ -136,6 +174,17 @@ export default function AdminDashboard() {
   const [visitorSessions, setVisitorSessions] = useState([]);
   const [visitorLeads, setVisitorLeads] = useState([]);
 
+  // Bell-badge tracking for the Activity and Visitors tabs — "last seen"
+  // timestamps persisted per-browser so a badge only reflects genuinely new
+  // client logins / new visitor sessions since this admin last opened that
+  // tab (not since the dawn of the account, and not shared across admins).
+  const [lastSeenActivityAt, setLastSeenActivityAt] = useState(
+    () => Number(localStorage.getItem("givsia_admin_seen_activity")) || 0
+  );
+  const [lastSeenVisitorsAt, setLastSeenVisitorsAt] = useState(
+    () => Number(localStorage.getItem("givsia_admin_seen_visitors")) || 0
+  );
+
   const clients = users.filter((u) => u.role === "client");
 
   const refreshAll = () => {
@@ -158,22 +207,72 @@ export default function AdminDashboard() {
 
   useEffect(refreshAll, []);
 
+  // Covers landing directly on the Activity/Visitors tab via a ?tab= link
+  // (see initialTab above) — openTab below only fires on an actual click,
+  // so a direct-landed tab needs its own one-time "mark seen" on mount.
+  useEffect(() => {
+    const now = Date.now();
+    if (tab === "activity") {
+      localStorage.setItem("givsia_admin_seen_activity", String(now));
+      setLastSeenActivityAt(now);
+    } else if (tab === "visitors") {
+      localStorage.setItem("givsia_admin_seen_visitors", String(now));
+      setLastSeenVisitorsAt(now);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Lightweight polling just for the two bell-badge sources — full
+  // refreshAll() hits ~15 endpoints, too heavy to run on a timer, but
+  // activity/visitors are cheap and are exactly what the badges need to
+  // stay live while an admin is sitting on some other tab.
+  useEffect(() => {
+    const poll = setInterval(() => {
+      api.get("/activity").then((res) => setActivity(res.data.activity)).catch(() => {});
+      api.get("/visitors").then((res) => setVisitorSessions(res.data.sessions)).catch(() => {});
+    }, 30000);
+    return () => clearInterval(poll);
+  }, []);
+
+  const unseenActivityCount = activity.filter(
+    (a) => a.role === "client" && a.action?.startsWith("Logged in") && new Date(a.createdAt).getTime() > lastSeenActivityAt
+  ).length;
+  const unseenVisitorsCount = visitorSessions.filter(
+    (s) => new Date(s.firstSeen).getTime() > lastSeenVisitorsAt
+  ).length;
+
+  const openTab = (t) => {
+    setTab(t);
+    const now = Date.now();
+    if (t === "activity") {
+      localStorage.setItem("givsia_admin_seen_activity", String(now));
+      setLastSeenActivityAt(now);
+    } else if (t === "visitors") {
+      localStorage.setItem("givsia_admin_seen_visitors", String(now));
+      setLastSeenVisitorsAt(now);
+    }
+  };
+
   return (
     <div className="container" style={{ paddingTop: 120, paddingBottom: 80 }}>
       <span className="eyebrow">Admin</span>
       <h1 style={{ margin: "12px 0 32px" }}>Welcome back, {user?.name}</h1>
 
       <div className="dashboard-tab-row" style={tabRow}>
-        {TABS.filter((t) => !AI_TAB_LABELS[t]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={tab === t ? "btn btn-primary" : "btn btn-ghost"}
-            style={{ textTransform: "capitalize" }}
-          >
-            {t}
-          </button>
-        ))}
+        {TABS.filter((t) => !AI_TAB_LABELS[t]).map((t) => {
+          const unseenCount = t === "activity" ? unseenActivityCount : t === "visitors" ? unseenVisitorsCount : 0;
+          return (
+            <button
+              key={t}
+              onClick={() => openTab(t)}
+              className={tab === t ? "btn btn-primary" : "btn btn-ghost"}
+              style={{ textTransform: "capitalize", position: "relative" }}
+            >
+              {t}
+              {unseenCount > 0 && <TabBellBadge count={unseenCount} />}
+            </button>
+          );
+        })}
       </div>
 
       <div style={aiTabRow}>
